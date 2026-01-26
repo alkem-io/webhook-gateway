@@ -1,0 +1,44 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Documentation
+*.md
+!README.md
+specs/
+docs/
+
+# Build artifacts
+bin/
+dist/
+coverage.out
+coverage.html
+
+# Environment files
+.env
+.env.*
+!configs/.env.example
+
+# Docker files
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Logs
+*.log
+
+# Tests
+test/
+*_test.go
+
+# Claude/Specify
+.claude/
+.specify/
