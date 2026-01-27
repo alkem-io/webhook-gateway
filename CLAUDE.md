@@ -9,13 +9,29 @@ Auto-generated from all feature plans. Last updated: 2026-01-26
 ## Project Structure
 
 ```text
-src/
-tests/
+cmd/
+  server/          # Application entrypoint
+configs/           # Environment config examples
+contracts/         # OpenAPI specs
+internal/
+  config/          # Configuration loading
+  health/          # Health check handlers
+  middleware/      # HTTP middleware
+  clients/         # Redis and RabbitMQ clients
+  webhooks/        # Webhook handlers
 ```
 
 ## Commands
 
-# Add commands for Go 1.24
+```bash
+make build        # Build the binary
+make test         # Run tests with race detector
+make lint         # Run golangci-lint
+make run          # Run the server locally
+make docker-build # Build Docker image
+make docker-run   # Run Docker container
+make tidy         # Run go mod tidy
+```
 
 ## Code Style
 

@@ -82,24 +82,35 @@ func (s *Service) TransformToNotificationEvent(payload *KratosVerificationPayloa
 	}
 }
 
-// CheckAndMarkWelcomeSent checks if welcome email was already sent and marks it if not.
-// Returns true if welcome should be sent (first time), false if already sent.
-// On Redis error, returns true (fail-open).
-func (s *Service) CheckAndMarkWelcomeSent(ctx context.Context, identityID string, correlationID string) bool {
-	isNew, err := s.redisClient.MarkWelcomeSentIfNew(ctx, identityID)
+// CheckWelcomeSent checks if welcome email was already sent.
+// Returns true if already sent, false if not.
+// On Redis error, returns false (fail-open: allow potential duplicate).
+func (s *Service) CheckWelcomeSent(ctx context.Context, identityID string, correlationID string) bool {
+	sent, err := s.redisClient.IsWelcomeSent(ctx, identityID)
 	if err != nil {
 		s.logger.Warn("redis unavailable for idempotency check, proceeding with notification",
 			zap.Error(err),
 			zap.String("correlation_id", correlationID),
 			zap.String("identity_id", identityID),
 		)
-		return true // Fail-open: allow potential duplicate rather than blocking
+		return false // Fail-open: allow potential duplicate rather than blocking
 	}
-	return isNew
+	return sent
+}
+
+// MarkWelcomeSent marks the welcome email as sent for an identity in Redis.
+func (s *Service) MarkWelcomeSent(ctx context.Context, identityID string, correlationID string) {
+	if err := s.redisClient.MarkWelcomeSent(ctx, identityID); err != nil {
+		s.logger.Warn("failed to mark welcome as sent in redis",
+			zap.Error(err),
+			zap.String("correlation_id", correlationID),
+			zap.String("identity_id", identityID),
+		)
+	}
 }
 
 // PublishNotificationEvent publishes the notification event to RabbitMQ.
-// Returns nil even on failure (fail-open semantics).
+// Returns error on failure, but caller should still return HTTP 200 (fail-open semantics).
 func (s *Service) PublishNotificationEvent(ctx context.Context, event UserSignupWelcomeEvent, correlationID string) error {
 	err := s.rabbitMQClient.Publish(ctx, event)
 	if err != nil {

@@ -41,16 +41,20 @@ func (c *RedisClient) Close() error {
 	return c.client.Close()
 }
 
-// MarkWelcomeSentIfNew attempts to set the welcome_sent key for an identity.
-// Returns true if the key was set (first time), false if it already exists.
-func (c *RedisClient) MarkWelcomeSentIfNew(ctx context.Context, identityID string) (bool, error) {
+// IsWelcomeSent checks if the welcome_sent key exists for an identity.
+// Returns true if already sent, false if not.
+func (c *RedisClient) IsWelcomeSent(ctx context.Context, identityID string) (bool, error) {
+	key := fmt.Sprintf("welcome_sent:%s", identityID)
+	exists, err := c.client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check welcome_sent key: %w", err)
+	}
+	return exists > 0, nil
+}
+
+// MarkWelcomeSent sets the welcome_sent key for an identity with TTL.
+func (c *RedisClient) MarkWelcomeSent(ctx context.Context, identityID string) error {
 	key := fmt.Sprintf("welcome_sent:%s", identityID)
 	value := time.Now().UTC().Format(time.RFC3339)
-
-	set, err := c.client.SetNX(ctx, key, value, WelcomeSentTTL).Result()
-	if err != nil {
-		return false, fmt.Errorf("failed to set welcome_sent key: %w", err)
-	}
-
-	return set, nil
+	return c.client.Set(ctx, key, value, WelcomeSentTTL).Err()
 }

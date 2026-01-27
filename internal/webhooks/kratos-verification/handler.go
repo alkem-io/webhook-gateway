@@ -68,12 +68,11 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("processing verification webhook",
 		zap.String("correlation_id", correlationID),
 		zap.String("identity_id", payload.IdentityID),
-		zap.String("email", payload.Email),
 	)
 
-	// Check idempotency
-	shouldSend := h.service.CheckAndMarkWelcomeSent(ctx, payload.IdentityID, correlationID)
-	if !shouldSend {
+	// Check idempotency (without marking yet)
+	alreadySent := h.service.CheckWelcomeSent(ctx, payload.IdentityID, correlationID)
+	if alreadySent {
 		h.logger.Info("welcome email already sent for this identity",
 			zap.String("correlation_id", correlationID),
 			zap.String("identity_id", payload.IdentityID),
@@ -103,6 +102,9 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// Mark as sent only after successful publish
+	h.service.MarkWelcomeSent(ctx, payload.IdentityID, correlationID)
 
 	h.logger.Info("webhook processed successfully",
 		zap.String("correlation_id", correlationID),
