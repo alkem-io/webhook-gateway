@@ -1,0 +1,88 @@
+// Package health provides health check endpoints.
+package health
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/alkem-io/webhook-gateway/internal/clients"
+)
+
+// HealthResponse is the response for liveness check.
+type HealthResponse struct {
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+}
+
+// ReadinessResponse is the response for readiness check.
+type ReadinessResponse struct {
+	Status    string `json:"status"`
+	Redis     string `json:"redis"`
+	RabbitMQ  string `json:"rabbitmq"`
+	Timestamp string `json:"timestamp"`
+}
+
+// Handlers holds dependencies for health check handlers.
+type Handlers struct {
+	redisClient    *clients.RedisClient
+	rabbitMQClient *clients.RabbitMQClient
+}
+
+// NewHandlers creates a new health handlers instance.
+func NewHandlers(redis *clients.RedisClient, rabbitmq *clients.RabbitMQClient) *Handlers {
+	return &Handlers{
+		redisClient:    redis,
+		rabbitMQClient: rabbitmq,
+	}
+}
+
+// LiveHandler handles GET /health/live.
+func (h *Handlers) LiveHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	resp := HealthResponse{
+		Status:    "ok",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+// ReadyHandler handles GET /health/ready.
+func (h *Handlers) ReadyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	redisStatus := "connected"
+	rabbitMQStatus := "connected"
+	overallStatus := "ok"
+
+	// Check Redis
+	if err := h.redisClient.Ping(ctx); err != nil {
+		redisStatus = "disconnected"
+		overallStatus = "unhealthy"
+	}
+
+	// Check RabbitMQ
+	if err := h.rabbitMQClient.Ping(); err != nil {
+		rabbitMQStatus = "disconnected"
+		overallStatus = "unhealthy"
+	}
+
+	resp := ReadinessResponse{
+		Status:    overallStatus,
+		Redis:     redisStatus,
+		RabbitMQ:  rabbitMQStatus,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if overallStatus == "unhealthy" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	json.NewEncoder(w).Encode(resp)
+}

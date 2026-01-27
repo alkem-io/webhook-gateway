@@ -1,0 +1,105 @@
+// Package main is the entrypoint for the webhook gateway server.
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/alkem-io/webhook-gateway/internal/clients"
+	"github.com/alkem-io/webhook-gateway/internal/config"
+	"github.com/alkem-io/webhook-gateway/internal/health"
+	"github.com/alkem-io/webhook-gateway/internal/middleware"
+	kratosverification "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-verification"
+)
+
+func main() {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize logger
+	logger := config.MustNewLogger(cfg)
+	defer logger.Sync()
+
+	logger.Info("starting webhook gateway",
+		zap.Int("port", cfg.Port),
+		zap.String("log_level", cfg.LogLevel),
+	)
+
+	// Initialize Redis client
+	redisClient, err := clients.NewRedisClient(cfg.RedisURL)
+	if err != nil {
+		logger.Fatal("failed to create redis client", zap.Error(err))
+	}
+	defer redisClient.Close()
+
+	// Initialize RabbitMQ client
+	rabbitMQClient, err := clients.NewRabbitMQClient(cfg.RabbitMQURL)
+	if err != nil {
+		logger.Fatal("failed to create rabbitmq client", zap.Error(err))
+	}
+	defer rabbitMQClient.Close()
+
+	// Create router
+	mux := http.NewServeMux()
+
+	// Health endpoints
+	healthHandlers := health.NewHandlers(redisClient, rabbitMQClient)
+	mux.HandleFunc("GET /health/live", healthHandlers.LiveHandler)
+	mux.HandleFunc("GET /health/ready", healthHandlers.ReadyHandler)
+
+	// Webhook endpoints
+	webhookService := kratosverification.NewService(redisClient, rabbitMQClient, cfg.PlatformURL, logger)
+	webhookHandler := kratosverification.NewHandler(webhookService, logger)
+	mux.HandleFunc("POST /api/v1/webhooks/kratos/verification", webhookHandler.HandleVerification)
+
+	// Apply middleware chain
+	var handler http.Handler = mux
+	handler = middleware.Logging(logger)(handler)
+	handler = middleware.Maintenance(cfg.MaintenanceMode, cfg.MaintenanceMessage, logger)(handler)
+	handler = middleware.CorrelationID(cfg.CorrelationIDHeader)(handler)
+
+	// Create server
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server in goroutine
+	go func() {
+		logger.Info("server listening", zap.String("addr", server.Addr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("server failed", zap.Error(err))
+		}
+	}()
+
+	// Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down server")
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("server forced to shutdown", zap.Error(err))
+	}
+
+	logger.Info("server stopped")
+}

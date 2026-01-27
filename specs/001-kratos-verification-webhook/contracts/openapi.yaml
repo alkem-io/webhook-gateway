@@ -1,0 +1,222 @@
+openapi: 3.0.3
+info:
+  title: Alkemio Webhook Gateway API
+  description: |
+    HTTP webhook gateway service that receives webhooks from external systems
+    and publishes notification events to the Alkemio platform.
+  version: 1.0.0
+  contact:
+    name: Alkemio Team
+
+servers:
+  - url: http://webhook-gateway:8080
+    description: Internal Kubernetes service
+
+tags:
+  - name: webhooks
+    description: Webhook endpoints for external systems
+  - name: health
+    description: Health check endpoints
+
+paths:
+  /api/v1/webhooks/kratos/verification:
+    post:
+      tags:
+        - webhooks
+      summary: Ory Kratos post-verification webhook
+      description: |
+        Receives webhook after successful email verification in Ory Kratos.
+        Publishes a UserSignupWelcome notification event to RabbitMQ.
+
+        **Important**: This endpoint always returns HTTP 200 to Kratos, even if
+        notification processing fails. This ensures the verification flow is not blocked.
+      operationId: kratosVerificationWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KratosVerificationPayload'
+            example:
+              identity_id: "550e8400-e29b-41d4-a716-446655440000"
+              email: "john@example.com"
+              display_name: "John Doe"
+              first_name: "John"
+      responses:
+        '200':
+          description: Webhook received and processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+              examples:
+                success:
+                  summary: Notification sent
+                  value:
+                    status: "success"
+                skipped_duplicate:
+                  summary: Duplicate webhook (welcome already sent)
+                  value:
+                    status: "skipped"
+                    message: "welcome email already sent for this identity"
+                skipped_missing_traits:
+                  summary: Missing required traits
+                  value:
+                    status: "skipped"
+                    message: "missing required traits: first_name"
+        '503':
+          description: Service unavailable (maintenance mode)
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until retry is recommended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceResponse'
+
+  /health/live:
+    get:
+      tags:
+        - health
+      summary: Liveness probe
+      description: Returns 200 if the service is running.
+      operationId: healthLive
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "ok"
+                timestamp: "2026-01-26T10:30:45Z"
+
+  /health/ready:
+    get:
+      tags:
+        - health
+      summary: Readiness probe
+      description: |
+        Returns 200 if the service is ready to accept traffic.
+        Checks connectivity to Redis and RabbitMQ.
+      operationId: healthReady
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: "ok"
+                redis: "connected"
+                rabbitmq: "connected"
+                timestamp: "2026-01-26T10:30:45Z"
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: "unhealthy"
+                redis: "disconnected"
+                rabbitmq: "connected"
+                timestamp: "2026-01-26T10:30:45Z"
+
+components:
+  schemas:
+    KratosVerificationPayload:
+      type: object
+      description: Webhook payload from Ory Kratos after email verification
+      required:
+        - identity_id
+        - email
+        - display_name
+        - first_name
+      properties:
+        identity_id:
+          type: string
+          format: uuid
+          description: Kratos identity UUID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          description: Verified email address
+          example: "john@example.com"
+        display_name:
+          type: string
+          description: User's display name
+          example: "John Doe"
+        first_name:
+          type: string
+          description: User's first name
+          example: "John"
+
+    WebhookResponse:
+      type: object
+      description: Response to webhook invocation
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [success, skipped, error]
+          description: Processing status
+        message:
+          type: string
+          description: Optional message explaining the status
+
+    HealthResponse:
+      type: object
+      description: Basic health check response
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+
+    ReadinessResponse:
+      type: object
+      description: Readiness check response with dependency status
+      required:
+        - status
+        - redis
+        - rabbitmq
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        redis:
+          type: string
+          enum: [connected, disconnected]
+        rabbitmq:
+          type: string
+          enum: [connected, disconnected]
+        timestamp:
+          type: string
+          format: date-time
+
+    MaintenanceResponse:
+      type: object
+      description: Response when service is in maintenance mode
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+        message:
+          type: string
+          description: Maintenance message

@@ -1,0 +1,45 @@
+# webhook-gateway Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2026-01-26
+
+## Active Technologies
+
+- Go 1.24 + go.uber.org/zap (logging), github.com/redis/go-redis/v9 (Redis), github.com/rabbitmq/amqp091-go (RabbitMQ), github.com/joho/godotenv (config) (001-kratos-verification-webhook)
+
+## Project Structure
+
+```text
+cmd/
+  server/          # Application entrypoint
+configs/           # Environment config examples
+contracts/         # OpenAPI specs
+internal/
+  config/          # Configuration loading
+  health/          # Health check handlers
+  middleware/      # HTTP middleware
+  clients/         # Redis and RabbitMQ clients
+  webhooks/        # Webhook handlers
+```
+
+## Commands
+
+```bash
+make build        # Build the binary
+make test         # Run tests with race detector
+make lint         # Run golangci-lint
+make run          # Run the server locally
+make docker-build # Build Docker image
+make docker-run   # Run Docker container
+make tidy         # Run go mod tidy
+```
+
+## Code Style
+
+Go 1.24: Follow standard conventions
+
+## Recent Changes
+
+- 001-kratos-verification-webhook: Added Go 1.24 + go.uber.org/zap (logging), github.com/redis/go-redis/v9 (Redis), github.com/rabbitmq/amqp091-go (RabbitMQ), github.com/joho/godotenv (config)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
