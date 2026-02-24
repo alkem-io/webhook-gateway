@@ -1,0 +1,75 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: default
+  name: alkemio-webhook-gateway-deployment
+  labels:
+    app: alkemio-webhook-gateway
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alkemio-webhook-gateway
+  template:
+    metadata:
+      labels:
+        app: alkemio-webhook-gateway
+    spec:
+      containers:
+        - name: alkemio-webhook-gateway
+          image: rg.nl-ams.scw.cloud/alkemio/alkemio-webhook-gateway:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_FORMAT
+              value: "json"
+            - name: RABBITMQ_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: alkemio-rabbitmq-cluster-default-user
+                  key: host
+            - name: RABBITMQ_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: alkemio-rabbitmq-cluster-default-user
+                  key: port
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: alkemio-rabbitmq-cluster-default-user
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: alkemio-rabbitmq-cluster-default-user
+                  key: password
+            - name: RABBITMQ_URL
+              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/"
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: alkemio-config
+                  key: REDIS_URL
+            - name: PLATFORM_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: alkemio-config
+                  key: ENDPOINT_CLUSTER
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
