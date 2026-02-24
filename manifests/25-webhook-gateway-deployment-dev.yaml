@@ -51,11 +51,16 @@ spec:
                   key: password
             - name: RABBITMQ_URL
               value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/"
-            - name: REDIS_URL
+            - name: REDIS_HOST
               valueFrom:
                 configMapKeyRef:
                   name: alkemio-config
-                  key: REDIS_URL
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: alkemio-config
+                  key: REDIS_PORT
             - name: PLATFORM_URL
               valueFrom:
                 configMapKeyRef:

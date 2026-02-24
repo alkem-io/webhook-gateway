@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -42,7 +43,7 @@ func Load() (*Config, error) {
 		Port:                getEnvInt("PORT", 8080),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		LogFormat:           getEnv("LOG_FORMAT", "json"),
-		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		RedisURL:            resolveRedisURL(),
 		RabbitMQURL:         getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		PlatformURL:         getEnv("PLATFORM_URL", "https://alkem.io"),
 		MaintenanceMode:     getEnvBool("MAINTENANCE_MODE", false),
@@ -51,6 +52,17 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// resolveRedisURL returns the Redis connection URL.
+// Prefers REDIS_URL if set; otherwise builds from REDIS_HOST + REDIS_PORT.
+func resolveRedisURL() string {
+	if url := os.Getenv("REDIS_URL"); url != "" {
+		return url
+	}
+	host := getEnv("REDIS_HOST", "localhost")
+	port := getEnv("REDIS_PORT", "6379")
+	return fmt.Sprintf("redis://%s:%s/0", host, port)
 }
 
 func getEnv(key, defaultValue string) string {
