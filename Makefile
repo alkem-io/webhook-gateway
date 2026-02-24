@@ -1,6 +1,8 @@
 .PHONY: build test lint run clean
 
 BINARY_NAME=webhook-gateway
+IMAGE_NAME=alkemio/webhook-gateway
+VERSION=v0.0.1
 BUILD_DIR=./bin
 
 build:
@@ -23,7 +25,7 @@ tidy:
 	go mod tidy
 
 docker-build:
-	docker build -t $(BINARY_NAME):latest .
+	docker build -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
 
 docker-run:
-	docker run -p 8080:8080 --env-file .env $(BINARY_NAME):latest
+	docker run -p 8080:8080 --env-file .env $(IMAGE_NAME):$(VERSION)
