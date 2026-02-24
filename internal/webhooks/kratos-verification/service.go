@@ -79,6 +79,7 @@ func (s *Service) TransformToNotificationEvent(payload *KratosVerificationPayloa
 		Platform: PlatformInfo{
 			URL: s.platformURL,
 		},
+		User: user,
 	}
 }
 
@@ -112,7 +113,7 @@ func (s *Service) MarkWelcomeSent(ctx context.Context, identityID string, correl
 // PublishNotificationEvent publishes the notification event to RabbitMQ.
 // Returns error on failure, but caller should still return HTTP 200 (fail-open semantics).
 func (s *Service) PublishNotificationEvent(ctx context.Context, event UserSignupWelcomeEvent, correlationID string) error {
-	err := s.rabbitMQClient.Publish(ctx, event)
+	err := s.rabbitMQClient.Publish(ctx, EventTypeUserSignUpWelcome, event)
 	if err != nil {
 		s.logger.Warn("failed to publish notification event",
 			zap.Error(err),

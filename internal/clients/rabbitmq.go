@@ -83,12 +83,24 @@ func (c *RabbitMQClient) Close() error {
 	return nil
 }
 
-// Publish sends a message to the notifications queue.
-func (c *RabbitMQClient) Publish(ctx context.Context, event any) error {
+// nestEnvelope wraps a message in the NestJS microservices transport format.
+// NestJS RMQ transport expects {"pattern": "<event>", "data": <payload>}.
+type nestEnvelope struct {
+	Pattern string `json:"pattern"`
+	Data    any    `json:"data"`
+}
+
+// Publish sends a message to the notifications queue wrapped in the NestJS envelope format.
+func (c *RabbitMQClient) Publish(ctx context.Context, pattern string, event any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	body, err := json.Marshal(event)
+	envelope := nestEnvelope{
+		Pattern: pattern,
+		Data:    event,
+	}
+
+	body, err := json.Marshal(envelope)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}

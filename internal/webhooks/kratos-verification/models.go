@@ -37,6 +37,7 @@ type UserSignupWelcomeEvent struct {
 	TriggeredBy UserPayload   `json:"triggeredBy"`
 	Recipients  []UserPayload `json:"recipients"`
 	Platform    PlatformInfo  `json:"platform"`
+	User        UserPayload   `json:"user"`
 }
 
 // WebhookResponse is the HTTP response to Kratos.
