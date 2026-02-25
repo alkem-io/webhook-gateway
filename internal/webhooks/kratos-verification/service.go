@@ -39,7 +39,7 @@ func (e ValidationError) Error() string {
 }
 
 // ValidatePayload validates the Kratos verification payload.
-func (s *Service) ValidatePayload(payload *KratosVerificationPayload) []ValidationError {
+func (s *Service) ValidatePayload(payload *Payload) []ValidationError {
 	var errors []ValidationError
 
 	if strings.TrimSpace(payload.IdentityID) == "" {
@@ -59,7 +59,7 @@ func (s *Service) ValidatePayload(payload *KratosVerificationPayload) []Validati
 }
 
 // TransformToNotificationEvent converts a Kratos payload to a notification event.
-func (s *Service) TransformToNotificationEvent(payload *KratosVerificationPayload) UserSignupWelcomeEvent {
+func (s *Service) TransformToNotificationEvent(payload *Payload) UserSignupWelcomeEvent {
 	user := UserPayload{
 		ID:        payload.IdentityID,
 		FirstName: payload.FirstName,

@@ -10,8 +10,8 @@ import (
 	"github.com/alkem-io/webhook-gateway/internal/clients"
 )
 
-// HealthResponse is the response for liveness check.
-type HealthResponse struct {
+// Response is the response for liveness check.
+type Response struct {
 	Status    string `json:"status"`
 	Timestamp string `json:"timestamp"`
 }
@@ -39,15 +39,15 @@ func NewHandlers(redis *clients.RedisClient, rabbitmq *clients.RabbitMQClient) *
 }
 
 // LiveHandler handles GET /health/live.
-func (h *Handlers) LiveHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) LiveHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	resp := HealthResponse{
+	resp := Response{
 		Status:    "ok",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // ReadyHandler handles GET /health/ready.
@@ -84,5 +84,5 @@ func (h *Handlers) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }

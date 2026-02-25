@@ -47,7 +47,7 @@ func NewLogger(cfg *Config) (*zap.Logger, error) {
 func MustNewLogger(cfg *Config) *zap.Logger {
 	logger, err := NewLogger(cfg)
 	if err != nil {
-		os.Stderr.WriteString("failed to create logger: " + err.Error() + "\n")
+		_, _ = os.Stderr.WriteString("failed to create logger: " + err.Error() + "\n")
 		os.Exit(1)
 	}
 	return logger

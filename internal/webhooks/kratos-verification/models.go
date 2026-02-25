@@ -1,9 +1,9 @@
 // Package kratosverification handles Ory Kratos post-verification webhooks.
 package kratosverification
 
-// KratosVerificationPayload represents the webhook payload from Kratos
+// Payload represents the webhook payload from Kratos
 // after successful email verification.
-type KratosVerificationPayload struct {
+type Payload struct {
 	IdentityID  string `json:"identity_id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
@@ -48,7 +48,7 @@ type WebhookResponse struct {
 
 // Event type constants.
 const (
-	EventTypeUserSignUpWelcome = "USER_SIGN_UP_WELCOME"
+	EventTypeUserSignUpWelcome = "USER_SIGN_UP_WELCOME" //nolint:gosec // not a credential
 	UserType                   = "user"
 )
 

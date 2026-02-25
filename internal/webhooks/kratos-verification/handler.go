@@ -34,13 +34,13 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Parse request body
-	var payload KratosVerificationPayload
+	var payload Payload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		h.logger.Warn("failed to decode webhook payload",
 			zap.Error(err),
 			zap.String("correlation_id", correlationID),
 		)
-		h.respondJSON(w, http.StatusOK, WebhookResponse{
+		h.respondJSON(w, WebhookResponse{
 			Status:  StatusSkipped,
 			Message: "invalid JSON payload",
 		})
@@ -58,7 +58,7 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 			zap.String("correlation_id", correlationID),
 			zap.Strings("missing_fields", missingFields),
 		)
-		h.respondJSON(w, http.StatusOK, WebhookResponse{
+		h.respondJSON(w, WebhookResponse{
 			Status:  StatusSkipped,
 			Message: "missing required traits: " + strings.Join(missingFields, ", "),
 		})
@@ -77,7 +77,7 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 			zap.String("correlation_id", correlationID),
 			zap.String("identity_id", payload.IdentityID),
 		)
-		h.respondJSON(w, http.StatusOK, WebhookResponse{
+		h.respondJSON(w, WebhookResponse{
 			Status:  StatusSkipped,
 			Message: "welcome email already sent for this identity",
 		})
@@ -96,7 +96,7 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 			zap.String("correlation_id", correlationID),
 			zap.String("identity_id", payload.IdentityID),
 		)
-		h.respondJSON(w, http.StatusOK, WebhookResponse{
+		h.respondJSON(w, WebhookResponse{
 			Status:  StatusError,
 			Message: "notification queuing failed",
 		})
@@ -112,13 +112,13 @@ func (h *Handler) HandleVerification(w http.ResponseWriter, r *http.Request) {
 		zap.String("status", StatusSuccess),
 	)
 
-	h.respondJSON(w, http.StatusOK, WebhookResponse{
+	h.respondJSON(w, WebhookResponse{
 		Status: StatusSuccess,
 	})
 }
 
-func (h *Handler) respondJSON(w http.ResponseWriter, status int, data any) {
+func (h *Handler) respondJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(data)
 }
