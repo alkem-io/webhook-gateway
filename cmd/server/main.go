@@ -29,7 +29,7 @@ func main() {
 
 	// Initialize logger
 	logger := config.MustNewLogger(cfg)
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	logger.Info("starting webhook gateway",
 		zap.Int("port", cfg.Port),
@@ -41,14 +41,14 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to create redis client", zap.Error(err))
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Initialize RabbitMQ client
 	rabbitMQClient, err := clients.NewRabbitMQClient(cfg.RabbitMQURL)
 	if err != nil {
 		logger.Fatal("failed to create rabbitmq client", zap.Error(err))
 	}
-	defer rabbitMQClient.Close()
+	defer func() { _ = rabbitMQClient.Close() }()
 
 	// Create router
 	mux := http.NewServeMux()

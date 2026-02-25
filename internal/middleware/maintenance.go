@@ -38,7 +38,7 @@ func Maintenance(enabled bool, message string, logger *zap.Logger) func(http.Han
 					Status:  "unavailable",
 					Message: message,
 				}
-				json.NewEncoder(w).Encode(resp)
+				_ = json.NewEncoder(w).Encode(resp)
 				return
 			}
 

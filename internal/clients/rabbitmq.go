@@ -30,7 +30,7 @@ func NewRabbitMQClient(url string) (*RabbitMQClient, error) {
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -44,8 +44,8 @@ func NewRabbitMQClient(url string) (*RabbitMQClient, error) {
 		nil,   // arguments
 	)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func (c *RabbitMQClient) Close() error {
 	defer c.mu.Unlock()
 
 	if c.channel != nil {
-		c.channel.Close()
+		_ = c.channel.Close()
 	}
 	if c.conn != nil {
 		return c.conn.Close()
