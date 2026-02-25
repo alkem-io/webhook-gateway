@@ -42,4 +42,9 @@ Go 1.24: Follow standard conventions
 - 001-kratos-verification-webhook: Added Go 1.24 + go.uber.org/zap (logging), github.com/redis/go-redis/v9 (Redis), github.com/rabbitmq/amqp091-go (RabbitMQ), github.com/joho/godotenv (config)
 
 <!-- MANUAL ADDITIONS START -->
+
+## Agent Guidelines
+
+See [AGENTS.md](./AGENTS.md) for core engineering principles and patterns that all AI agents must follow.
+
 <!-- MANUAL ADDITIONS END -->
