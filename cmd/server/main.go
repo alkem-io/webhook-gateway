@@ -16,6 +16,7 @@ import (
 	"github.com/alkem-io/webhook-gateway/internal/config"
 	"github.com/alkem-io/webhook-gateway/internal/health"
 	"github.com/alkem-io/webhook-gateway/internal/middleware"
+	kratosloginbackoff "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-login-backoff"
 	kratosverification "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-verification"
 )
 
@@ -62,6 +63,17 @@ func main() {
 	webhookService := kratosverification.NewService(redisClient, rabbitMQClient, cfg.PlatformURL, logger)
 	webhookHandler := kratosverification.NewHandler(webhookService, logger)
 	mux.HandleFunc("POST /api/v1/webhooks/kratos/verification", webhookHandler.HandleVerification)
+
+	// Login backoff endpoints
+	loginBackoffService := kratosloginbackoff.NewService(redisClient, cfg, logger)
+	loginBackoffHandler := kratosloginbackoff.NewHandler(loginBackoffService, logger)
+	mux.HandleFunc("POST /api/v1/webhooks/kratos/login-backoff/before-login", loginBackoffHandler.HandleBeforeLogin)
+	mux.HandleFunc("POST /api/v1/webhooks/kratos/login-backoff/after-login", loginBackoffHandler.HandleAfterLogin)
+
+	// Login proxy: intercepts Kratos login submissions for backoff enforcement
+	loginProxy := kratosloginbackoff.NewLoginProxy(cfg.KratosInternalURL, loginBackoffService, logger)
+	mux.Handle("/self-service/login", loginProxy)
+	mux.Handle("/self-service/login/", loginProxy)
 
 	// Apply middleware chain
 	var handler http.Handler = mux
