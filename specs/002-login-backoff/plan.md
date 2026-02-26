@@ -59,6 +59,8 @@ specs/002-login-backoff/
 ├── quickstart.md        # Phase 1: Local development guide
 ├── contracts/
 │   └── login-backoff-openapi.yaml  # Phase 1: OpenAPI 3.0.3 contract
+├── decisions/
+│   └── ADR-001-reverse-proxy-for-login-interception.md  # Proxy vs Kratos hooks (Constitution #17)
 └── tasks.md             # Phase 2 output (created by /speckit.tasks)
 ```
 
