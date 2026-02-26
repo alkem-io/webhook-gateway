@@ -19,7 +19,7 @@ Add login brute force protection to the webhook-gateway with two endpoints: a be
 **Project Type**: Single backend service (existing webhook-gateway)
 **Performance Goals**: <100ms before-login response (FR-013) - achievable via single Redis round-trip using Lua script
 **Constraints**: Fail-open on Redis failure; no new external dependencies; endpoints callable from multiple integration points
-**Scale/Scope**: Two new HTTP endpoints, one new webhook package, config extensions, Redis operation additions
+**Scale/Scope**: Two new webhook endpoints, one reverse proxy handler, one new webhook package, config extensions, Redis operation additions, Traefik routing, client-web lockout display
 
 ## Constitution Check
 
@@ -35,7 +35,7 @@ Add login brute force protection to the webhook-gateway with two endpoints: a be
 | 6 | CI Integrity | PASS | Existing pipeline covers new code via `go test ./...` and `golangci-lint` |
 | 7 | Evidence-Based Performance Goals | PASS | FR-013's 100ms target is meaningful: we control the Redis round-trip, verified achievable via Lua script |
 | 8 | Meaningful Success Criteria | PASS | All success criteria (lockout, reset, fail-open, logging) are testable within the service |
-| 9 | No Busywork | PASS | Lean design: 3 files in webhook package, minimal config additions |
+| 9 | No Busywork | PASS | Lean design: 4 files in webhook package (handler, models, service, proxy), minimal config additions |
 | 10 | Meaningful Tests Only | PASS | Tests defend real invariants: lockout thresholds, counter reset, fail-open behavior |
 | 11 | Latest Dependencies Always | PASS | No new dependencies; existing ones already current |
 | 12 | Always Root Cause Analysis | PASS | N/A for new feature |
@@ -66,7 +66,7 @@ specs/002-login-backoff/
 
 ```text
 cmd/server/
-└── main.go                          # Add: login-backoff handler registration + config fields
+└── main.go                          # Add: login-backoff handler registration, proxy routes, config fields
 
 internal/
 ├── config/
@@ -81,6 +81,7 @@ internal/
     └── kratos-login-backoff/        # NEW
         ├── handler.go               # HTTP handlers for before-login and after-login
         ├── models.go                # Request/response types
+        ├── proxy.go                 # Reverse proxy intercepting Kratos login submissions
         └── service.go               # Business logic: validate, increment, check, reset
 
 configs/
@@ -90,7 +91,7 @@ contracts/
 └── openapi.yaml                     # Add: login-backoff endpoint definitions
 ```
 
-**Structure Decision**: Follows existing webhook segregation pattern (Constitution #16). New webhook gets its own package under `internal/webhooks/kratos-login-backoff/` with the same handler/models/service file structure as `kratos-verification/`. Shared infrastructure (Redis client, config, middleware) is extended in-place. No new packages or abstractions introduced.
+**Structure Decision**: Follows existing webhook segregation pattern (Constitution #16). New webhook gets its own package under `internal/webhooks/kratos-login-backoff/` with handler/models/service/proxy files. Shared infrastructure (Redis client, config, middleware) is extended in-place. No new packages or abstractions introduced.
 
 ## Key Design Decisions
 
@@ -116,6 +117,18 @@ If only identifier or only IP is provided, the endpoint checks/increments only t
 ### D-005: Lockout Precedence
 
 When both identifier and IP exceed their thresholds, the lockout with the longer remaining TTL takes precedence in the response (as specified in edge cases). The check evaluates identifier first, then IP; if both are locked, the one with more remaining time is reported.
+
+### D-006: Built-in Reverse Proxy
+
+Research R-001 identified that Kratos before-hooks cannot intercept credential submissions. Rather than leaving the integration layer as an external infrastructure concern, the webhook-gateway includes a built-in reverse proxy (`proxy.go`) using Go's `httputil.ReverseProxy`. Traefik routes login traffic (`/ory/kratos/public/self-service/login*`) to the webhook-gateway, which checks backoff on POST requests and proxies all requests (allowed POSTs + all GETs) to Kratos via `KratosInternalURL`. This keeps the entire backoff flow self-contained within the webhook-gateway.
+
+### D-007: Browser vs API Response Differentiation
+
+The proxy detects browser requests via the `Accept: text/html` header. Browser requests that are blocked receive HTTP 303 redirect to `/login?lockout=true&retry_after=N` (which the client-web LoginPage handles). API requests receive HTTP 429 with a JSON error body. This supports both native browser form submissions and programmatic API clients without requiring the frontend to handle raw JSON error pages.
+
+### D-008: Client-Web Lockout Display
+
+The lockout message is injected into the Kratos flow's `ui.messages` array (id: `9000429`, type: `error`) via the existing `produce()` pattern in LoginPage.tsx. This reuses the `KratosMessages` component that already renders Kratos error alerts, ensuring consistent styling. The message ID `9000429` is in a custom range (`9xxxxxx`) outside all Kratos-reserved ranges (`1xxxxxx`–`5xxxxxx`).
 
 ## Spec Corrections Required
 

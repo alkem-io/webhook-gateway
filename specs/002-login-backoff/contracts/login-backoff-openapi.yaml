@@ -9,8 +9,13 @@ info:
     - **after-login**: Called after successful password authentication to reset counters.
 
     The before-login endpoint is designed to be called by any integration layer
-    (Kratos webhook, reverse proxy, or application server) that can provide the
-    identifier and client IP at credential submission time.
+    that can provide the identifier and client IP at credential submission time.
+
+    Additionally, the webhook-gateway includes a built-in reverse proxy that
+    intercepts Kratos login POST submissions (routed via Traefik on
+    `/self-service/login`). The proxy extracts identifier and client IP from
+    the request body/headers, checks backoff, and returns HTTP 429 (API) or
+    HTTP 303 redirect to `/login?lockout=true&retry_after=N` (browser) when blocked.
 
     The after-login endpoint is called by a Kratos after-login webhook hook
     configured with a Jsonnet template that extracts identity and IP information.
@@ -161,6 +166,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MaintenanceResponse'
+
+  /self-service/login:
+    post:
+      tags:
+        - login-backoff
+      summary: Reverse proxy for Kratos login with backoff enforcement
+      description: |
+        Intercepts Kratos login credential submissions. Extracts identifier
+        from JSON or form-encoded body and client IP from headers. Checks
+        backoff thresholds. If allowed, proxies the request to Kratos. If
+        blocked, returns 429 (API) or 303 redirect (browser).
+
+        Routed via Traefik: `/ory/kratos/public/self-service/login*` strips
+        prefix and forwards to webhook-gateway.
+      operationId: loginProxy
+      responses:
+        '200':
+          description: Proxied response from Kratos (login allowed, forwarded to Kratos)
+        '303':
+          description: Browser lockout redirect to `/login?lockout=true&retry_after=N`
+        '429':
+          description: API lockout response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        enum: [429]
+                      status:
+                        type: string
+                        enum: ["Too Many Requests"]
+                      reason:
+                        type: string
+                        enum: [identifier, ip]
+                      message:
+                        type: string
+    get:
+      tags:
+        - login-backoff
+      summary: Proxy GET requests to Kratos (flow creation)
+      description: |
+        GET requests (e.g., `/self-service/login/browser`, `/self-service/login/api`)
+        are proxied directly to Kratos without backoff interception.
+      operationId: loginProxyGet
+      responses:
+        '200':
+          description: Proxied response from Kratos
+        '303':
+          description: Kratos redirect (browser flow creation)
 
 components:
   schemas:

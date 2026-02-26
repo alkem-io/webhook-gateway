@@ -117,6 +117,26 @@
 
 ---
 
+## Phase 8: Reverse Proxy Integration (Post-Spec)
+
+**Purpose**: Implement the before-login integration layer as a built-in reverse proxy per research.md R-001 Option A
+
+- [X] T017 [US1] Create reverse proxy handler in internal/webhooks/kratos-login-backoff/proxy.go: implement NewLoginProxy(kratosURL, service, logger) using httputil.NewSingleHostReverseProxy, intercept POST requests to extract identifier from JSON/form body and client IP from headers (True-Client-Ip, X-Forwarded-For, X-Real-Ip, RemoteAddr), check backoff via service.CheckAndIncrement, return 429 JSON for API clients or 303 redirect to /login?lockout=true&retry_after=N for browser clients (Accept: text/html), proxy allowed requests and all GET requests to Kratos
+- [X] T018 [US1] Add KratosInternalURL config field (env: KRATOS_INTERNAL_URL, default: http://kratos:4433) to internal/config/config.go and KRATOS_INTERNAL_URL to configs/.env.example
+- [X] T019 [US1] Wire login proxy routes in cmd/server/main.go: register /self-service/login and /self-service/login/ handlers using NewLoginProxy with cfg.KratosInternalURL
+- [X] T020 [US1] Add webhook-gateway service and kratos-login-backoff router (priority 200) to server/.build/traefik/http.yml, add KRATOS_INTERNAL_URL env to webhook-gateway in server/quickstart-services.yml
+
+---
+
+## Phase 9: Client-Web Lockout Display (Post-Spec)
+
+**Purpose**: Display user-friendly lockout message in the login UI when blocked by the proxy
+
+- [X] T021 [US1] Add lockout query param handling to client-web/src/core/auth/authentication/pages/LoginPage.tsx: read lockout and retry_after query params, inject error message (id: 9000429, type: error) into flow ui.messages via existing produce() pattern for KratosMessages rendering
+- [X] T022 [US1] Add authentication.lockout translation key to client-web/src/core/i18n/en/translation.en.json
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

@@ -18,6 +18,9 @@ LOGIN_BACKOFF_MAX_IDENTIFIER_ATTEMPTS=10
 LOGIN_BACKOFF_MAX_IP_ATTEMPTS=20
 LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS=120
 LOGIN_BACKOFF_IP_LOCKOUT_SECONDS=120
+
+# Kratos internal URL for the reverse proxy (required for proxy mode)
+KRATOS_INTERNAL_URL=http://kratos:4433
 ```
 
 ## Running Locally
@@ -100,6 +103,69 @@ function(ctx) {
 }
 ```
 
-### Before-Login Integration
+### Before-Login Integration (Reverse Proxy)
 
-The before-login endpoint must be called at **credential submission time** (not at flow creation). See `research.md` R-001 for details on why Kratos `before` hooks cannot be used for this purpose. The calling mechanism (reverse proxy, Alkemio server, etc.) is an infrastructure concern.
+The before-login check is handled by a built-in reverse proxy (`proxy.go`). Traefik routes login traffic to the webhook-gateway, which checks backoff on POST requests and proxies allowed requests to Kratos.
+
+**Traefik routing** (in `server/.build/traefik/http.yml`):
+
+```yaml
+# Service
+webhook-gateway:
+  loadBalancer:
+    servers:
+      - url: 'http://webhook-gateway:8080/'
+
+# Router (priority 200 — higher than the default kratos-public router)
+kratos-login-backoff:
+  rule: 'PathPrefix(`/ory/kratos/public/self-service/login`)'
+  service: 'webhook-gateway'
+  middlewares:
+    - strip-kratos-public-prefix
+  entryPoints:
+    - 'web'
+  priority: 200
+```
+
+**Proxy routes** registered in `main.go`:
+- `/self-service/login` — exact path (credential submission POST)
+- `/self-service/login/` — sub-paths (flow creation GET, e.g. `/self-service/login/browser`)
+
+**Behavior**:
+- GET requests → proxied to Kratos without interception
+- POST requests → identifier and IP extracted from body/headers, backoff checked, blocked with 429 (API) or 303 redirect (browser) if over threshold
+
+### Client-Web Lockout Display
+
+When the proxy blocks a browser request, it redirects to `/login?lockout=true&retry_after=N`. The `LoginPage.tsx` reads these query params and injects a lockout message into the Kratos UI messages array (id: `9000429`, type: `error`), which is rendered by the existing `KratosMessages` component.
+
+Translation key: `authentication.lockout` in `translation.en.json`.
+
+### Docker Compose Deployment
+
+The webhook-gateway is added to `quickstart-services.yml`:
+
+```yaml
+webhook-gateway:
+  container_name: alkemio_dev_webhook_gateway
+  hostname: webhook-gateway
+  image: alkemio/webhook-gateway:latest
+  depends_on:
+    redis: { condition: service_started }
+    rabbitmq: { condition: service_healthy }
+  environment:
+    - REDIS_URL=redis://redis:6379/0
+    - KRATOS_INTERNAL_URL=http://kratos:4433
+    - LOGIN_BACKOFF_MAX_IDENTIFIER_ATTEMPTS=10
+    - LOGIN_BACKOFF_MAX_IP_ATTEMPTS=20
+    - LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS=120
+    - LOGIN_BACKOFF_IP_LOCKOUT_SECONDS=120
+  networks:
+    - alkemio_dev_net
+```
+
+Build and deploy:
+```bash
+make docker-build
+cd ../server && docker compose --env-file .env.docker -f quickstart-services.yml -p alkemio-serverdev up -d webhook-gateway
+```

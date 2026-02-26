@@ -79,6 +79,34 @@ Added to `internal/config/config.go`:
 | `LoginBackoffMaxIPAttempts` | `LOGIN_BACKOFF_MAX_IP_ATTEMPTS` | int | 20 | Max failed attempts per IP before lockout |
 | `LoginBackoffIdentifierLockoutSeconds` | `LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS` | int | 120 | Lockout duration for identifier (seconds) |
 | `LoginBackoffIPLockoutSeconds` | `LOGIN_BACKOFF_IP_LOCKOUT_SECONDS` | int | 120 | Lockout duration for IP (seconds) |
+| `KratosInternalURL` | `KRATOS_INTERNAL_URL` | string | `http://kratos:4433` | Kratos backend URL for the reverse proxy |
+
+## Reverse Proxy (Login Interception)
+
+The reverse proxy (`proxy.go`) intercepts Kratos login POST submissions routed via Traefik. It extracts identifier and client IP directly from the HTTP request rather than from a webhook payload.
+
+### Proxy Request Extraction
+
+| Source | Field | Extraction Method |
+|--------|-------|-------------------|
+| Request body (JSON) | `identifier` | `json:"identifier"` field from Kratos login body |
+| Request body (form) | `identifier` | `identifier` form field |
+| Request headers | `client_ip` | True-Client-Ip → X-Forwarded-For (first) → X-Real-Ip → RemoteAddr |
+
+### Proxy Blocked Response (API - Accept: application/json)
+
+HTTP 429 with JSON body:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `error.code` | integer | `429` |
+| `error.status` | string | `"Too Many Requests"` |
+| `error.reason` | string | `"identifier"` or `"ip"` |
+| `error.message` | string | Human-readable lockout message |
+
+### Proxy Blocked Response (Browser - Accept: text/html)
+
+HTTP 303 redirect to `/login?lockout=true&retry_after=N` where N is remaining lockout seconds.
 
 ## Redis Operations
 

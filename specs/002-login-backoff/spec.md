@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-login-backoff`
 **Created**: 2026-02-25
-**Status**: Draft
+**Status**: Implemented
 **Input**: User description: "Add login backoff / brute force protection as a Kratos webhook in the webhook-gateway. The service receives two webhooks from Ory Kratos: (1) a before-login hook that checks whether the identifier (email) or client IP is currently locked out due to too many failed attempts, and if so interrupts the login flow; (2) an after-login hook on successful password authentication that resets the backoff counter. State (failed attempt counts, lockout expiry) is tracked in Redis. This replaces the planned standalone login-backoff-service from infra-ops with endpoints in the existing webhook-gateway, following the same domain-oriented package pattern (internal/webhooks/kratos-login-backoff/). The Kratos config already has Jsonnet templates that extract identifier and client_ip from the login flow context."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -89,10 +89,10 @@ The security and operations team can observe login backoff activity through stru
 
 ### Functional Requirements
 
-- **FR-001**: System MUST expose a before-login endpoint that checks and increments failed attempt counters before password authentication proceeds. The endpoint is caller-agnostic: it may be invoked by a reverse proxy, application server, or Kratos webhook depending on the integration layer (see research.md R-001).
+- **FR-001**: System MUST expose a before-login endpoint that checks and increments failed attempt counters before password authentication proceeds. The endpoint is caller-agnostic: it may be invoked by a reverse proxy, application server, or Kratos webhook depending on the integration layer (see research.md R-001). Additionally, the webhook-gateway includes a built-in reverse proxy (`proxy.go`) that intercepts Kratos login POST submissions, extracts the identifier and client IP from the request, checks backoff, and proxies allowed requests to Kratos.
 - **FR-002**: System MUST track the number of failed login attempts per identifier (email address) in persistent storage with a configurable TTL.
 - **FR-003**: System MUST track the number of failed login attempts per client IP address in persistent storage with a configurable TTL.
-- **FR-004**: System MUST block login attempts when the failed attempt count for the identifier OR the client IP exceeds the configured threshold, by returning HTTP 403 with a JSON body `{"allowed": false, "reason": "identifier_locked" | "ip_locked", "message": "Account temporarily locked due to too many failed attempts. Try again in X minutes.", "retry_after_seconds": N}` where X is the remaining lockout duration (rounded up to whole minutes) and N is the remaining seconds. The caller (reverse proxy or application server) is responsible for adapting this response to the UI format.
+- **FR-004**: System MUST block login attempts when the failed attempt count for the identifier OR the client IP exceeds the configured threshold. The before-login webhook endpoint returns HTTP 403 with JSON body `{"allowed": false, "reason": "identifier" | "ip", "message": "...", "retry_after_seconds": N}`. The reverse proxy returns HTTP 429 with JSON error body for API clients, or HTTP 303 redirect to `/login?lockout=true&retry_after=N` for browser clients (detected via Accept header). The client-web LoginPage reads lockout query params and displays the error via the existing Kratos messages UI.
 - **FR-005**: System MUST expose an after-login endpoint that Ory Kratos calls after successful password authentication.
 - **FR-006**: System MUST reset the failed attempt counter for both the identifier and the client IP upon receiving a successful login notification.
 - **FR-007**: System MUST allow login attempts to proceed (fail-open) when the backoff tracking storage is unavailable, and log a warning.
@@ -102,6 +102,9 @@ The security and operations team can observe login backoff activity through stru
 - **FR-010**: System MUST support separately configurable lockout durations for identifier-based and IP-based lockouts. Defaults: 2 minutes for both identifier and IP lockouts.
 - **FR-011**: System MUST validate incoming webhook payloads and skip processing (fail-open) for malformed or incomplete requests, logging a warning.
 - **FR-012**: System MUST atomically increment the failed attempt counter for the identifier and/or client IP on each before-login invocation. The counter is reset only when the after-login endpoint reports a successful authentication. No explicit "login failed" signal is needed — an unreset counter naturally reflects a failed attempt.
+- **FR-014**: System MUST include a reverse proxy handler (`proxy.go`) that intercepts Kratos login credential submissions (POST to `/self-service/login`), extracts identifier from JSON or form-encoded body, extracts client IP from True-Client-Ip / X-Forwarded-For / X-Real-Ip / RemoteAddr, checks backoff via the service layer, and proxies allowed requests to Kratos. GET requests (flow creation) are proxied without interception.
+- **FR-015**: System MUST differentiate browser vs API clients when blocking: browser requests (Accept: text/html) receive HTTP 303 redirect to `/login?lockout=true&retry_after=N`; API requests receive HTTP 429 with JSON error body.
+- **FR-016**: Client-web LoginPage MUST display a lockout error message (via the existing KratosMessages component) when `lockout=true` query parameter is present, showing the remaining lockout duration in minutes.
 
 ### Key Entities
 
@@ -122,13 +125,16 @@ The security and operations team can observe login backoff activity through stru
 
 ## Assumptions
 
-- The before-login endpoint is called by an integration layer (reverse proxy or application server) at credential submission time — NOT by a Kratos before-hook, which fires at flow initialization before the identifier is available (see research.md R-001).
+- The before-login endpoint is called by the built-in reverse proxy (`proxy.go`) at credential submission time. Traefik routes `/ory/kratos/public/self-service/login*` to the webhook-gateway, which checks backoff and proxies allowed requests to Kratos. This is NOT a Kratos before-hook, which fires at flow initialization before the identifier is available (see research.md R-001).
 - The after-login endpoint is called by Ory Kratos via a post-login webhook (`response.ignore: true`) after successful password authentication.
 - Only password-based login flows trigger these hooks. OIDC and passkey flows are handled by external providers and are not subject to backoff.
 - The webhook endpoints are deployed on an internal network; no authentication mechanism is required at the application layer.
 - Failed attempt counting uses an increment-on-check model: the before-login endpoint increments the counter each time it is called (representing an attempt), and the after-login endpoint resets it on success. If a login attempt fails, no explicit "failure" webhook is needed — the counter simply remains incremented.
-- Jsonnet templates for extracting identifier and client_ip do not currently exist for before-login hooks and cannot work at that hook point (see research.md R-001). A Jsonnet template for the after-login hook (which has identity context) is feasible and is an infrastructure integration concern outside this service's scope.
+- Jsonnet templates for extracting identifier and client_ip do not currently exist for before-login hooks and cannot work at that hook point (see research.md R-001). A Jsonnet template for the after-login hook (which has identity context) has been created at `server/.build/ory/kratos/login-backoff-after.jsonnet`.
 - The existing shared infrastructure (structured logging, health checks, correlation ID middleware) in the webhook gateway is reused.
+- The `KratosInternalURL` config (default `http://kratos:4433`) specifies the Kratos backend URL that the reverse proxy forwards to.
+- Traefik routing is configured with a `kratos-login-backoff` router (priority 200) that intercepts `/ory/kratos/public/self-service/login*` and forwards to webhook-gateway, while all other Kratos public API traffic goes directly to Kratos.
+- The client-web LoginPage injects lockout messages into the Kratos UI messages array (id: `9000429`, type: `error`) to reuse the existing error display infrastructure.
 
 ## Clarifications
 
