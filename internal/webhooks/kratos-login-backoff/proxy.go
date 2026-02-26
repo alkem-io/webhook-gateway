@@ -93,6 +93,12 @@ func NewLoginProxy(kratosURL string, service *Service, logger *zap.Logger) http.
 			return
 		}
 
+		// Set True-Client-Ip so Kratos after-login webhooks can access it via ctx.request_headers.
+		// Kratos v1.3.1 has a hardcoded header allowlist; True-Client-Ip is on it but X-Forwarded-For is not.
+		if clientIP != "" {
+			r.Header.Set("True-Client-Ip", clientIP)
+		}
+
 		// Restore body and proxy to Kratos
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		r.ContentLength = int64(len(bodyBytes))
