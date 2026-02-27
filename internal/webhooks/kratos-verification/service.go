@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/clients"
+	"github.com/alkem-io/kratos-webhooks/internal/clients"
 )
 
 // Service handles the business logic for Kratos verification webhooks.

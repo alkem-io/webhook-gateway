@@ -69,7 +69,7 @@ selfservice:
         hooks:
           - hook: web_hook
             config:
-              url: http://webhook-gateway:8080/api/v1/webhooks/kratos/verification
+              url: http://kratos-webhooks:8080/api/v1/webhooks/kratos/verification
               method: POST
               body: base64://ZnVuY3Rpb24oY3R4KSB7CiAgaWRlbnRpdHlfaWQ6IGN0eC5pZGVudGl0eS5pZCwKICBlbWFpbDogY3R4LmlkZW50aXR5LnRyYWl0cy5lbWFpbCwKICBkaXNwbGF5X25hbWU6IGN0eC5pZGVudGl0eS50cmFpdHMuZGlzcGxheV9uYW1lLAogIGZpcnN0X25hbWU6IGN0eC5pZGVudGl0eS50cmFpdHMuZmlyc3RfbmFtZQp9
               response:

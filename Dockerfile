@@ -11,17 +11,17 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /webhook-gateway ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /kratos-webhooks ./cmd/server
 
 # Runtime stage
 FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /
 
-COPY --from=builder /webhook-gateway /webhook-gateway
+COPY --from=builder /kratos-webhooks /kratos-webhooks
 
 USER nonroot:nonroot
 
 EXPOSE 8080
 
-ENTRYPOINT ["/webhook-gateway"]
+ENTRYPOINT ["/kratos-webhooks"]

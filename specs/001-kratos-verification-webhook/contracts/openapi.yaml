@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Alkemio Webhook Gateway API
+  title: Alkemio Kratos Webhooks API
   description: |
     HTTP webhook gateway service that receives webhooks from external systems
     and publishes notification events to the Alkemio platform.
@@ -9,7 +9,7 @@ info:
     name: Alkemio Team
 
 servers:
-  - url: http://webhook-gateway:8080
+  - url: http://kratos-webhooks:8080
     description: Internal Kubernetes service
 
 tags:

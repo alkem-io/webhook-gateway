@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Login Backoff Webhook Endpoints
   description: |
-    Login brute force protection endpoints for the Alkemio Webhook Gateway.
+    Login brute force protection endpoints for the Alkemio Kratos Webhooks service.
 
     Two endpoints handle the login backoff lifecycle:
     - **before-login**: Called before each login attempt to check lockout status and increment counters.
@@ -11,7 +11,7 @@ info:
     The before-login endpoint is designed to be called by any integration layer
     that can provide the identifier and client IP at credential submission time.
 
-    Additionally, the webhook-gateway includes a built-in reverse proxy that
+    Additionally, the kratos-webhooks includes a built-in reverse proxy that
     intercepts Kratos login POST submissions (routed via Traefik on
     `/self-service/login`). The proxy extracts identifier and client IP from
     the request body/headers, checks backoff, and returns HTTP 429 (API) or
@@ -22,7 +22,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://webhook-gateway:8080
+  - url: http://kratos-webhooks:8080
     description: Internal Kubernetes service
 
 tags:
@@ -179,7 +179,7 @@ paths:
         blocked, returns 429 (API) or 303 redirect (browser).
 
         Routed via Traefik: `/ory/kratos/public/self-service/login*` strips
-        prefix and forwards to webhook-gateway.
+        prefix and forwards to kratos-webhooks.
       operationId: loginProxy
       responses:
         '200':

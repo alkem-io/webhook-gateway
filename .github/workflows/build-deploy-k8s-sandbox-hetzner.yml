@@ -17,8 +17,8 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
       - run: |
-          docker build -f Dockerfile . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-webhook-gateway:${{ github.sha }} -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-webhook-gateway:latest
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-webhook-gateway:${{ github.sha }}
+          docker build -f Dockerfile . -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-kratos-webhooks:${{ github.sha }} -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-kratos-webhooks:latest
+          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-kratos-webhooks:${{ github.sha }}
 
       - name: Install Kubectl
         uses: azure/setup-kubectl@v4.0.0
@@ -33,7 +33,7 @@ jobs:
 
       - name: Create Image Pull Secret
         run: |
-          kubectl create secret docker-registry alkemio-webhook-gateway-secret \
+          kubectl create secret docker-registry alkemio-kratos-webhooks-secret \
             --docker-server=${{ secrets.REGISTRY_LOGIN_SERVER }} \
             --docker-username=${{ secrets.REGISTRY_USERNAME }} \
             --docker-password=${{ secrets.REGISTRY_PASSWORD }} \
@@ -42,8 +42,8 @@ jobs:
       - uses: Azure/k8s-deploy@v5.0.0
         with:
           manifests: |
-            manifests/25-webhook-gateway-deployment-dev.yaml
+            manifests/25-kratos-webhooks-deployment-dev.yaml
           images: |
-            ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-webhook-gateway:${{ github.sha }}
+            ${{ secrets.REGISTRY_LOGIN_SERVER }}/alkemio-kratos-webhooks:${{ github.sha }}
           imagepullsecrets: |
-            alkemio-webhook-gateway-secret
+            alkemio-kratos-webhooks-secret

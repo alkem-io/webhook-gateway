@@ -23,7 +23,7 @@ See [research.md R-001](../research.md) for the detailed investigation.
 
 ## Decision
 
-Build a reverse proxy into the webhook-gateway (`proxy.go`) using Go's `httputil.ReverseProxy`. Traefik routes all login traffic (`/ory/kratos/public/self-service/login*`) to the webhook-gateway at priority 200. The proxy:
+Build a reverse proxy into the kratos-webhooks (`proxy.go`) using Go's `httputil.ReverseProxy`. Traefik routes all login traffic (`/ory/kratos/public/self-service/login*`) to the kratos-webhooks at priority 200. The proxy:
 
 1. Intercepts POST requests (credential submissions)
 2. Extracts the identifier (email) from the request body and the client IP from headers
@@ -40,7 +40,7 @@ The after-login Kratos webhook (native, fires on success) resets counters when a
 |-------------|------|------|--------------|
 | **A. Kratos before-hook** | Native Kratos integration, no proxy needed | Fires at flow creation (page load), not credential submission. No access to identifier. Only IP-based rate limiting possible. | Cannot count per-identifier failed attempts — the fundamental requirement |
 | **B. Kratos after-hook only** | Works natively for counter reset | Only fires on successful auth. Cannot count or block failed attempts at all. | No mechanism for counting failures |
-| **C. Alkemio server-side call** | No infrastructure routing changes | Requires modifying the Alkemio server (separate repo/team). Couples webhook-gateway to server release cycle. | Breaks service boundary; webhook-gateway should be self-contained |
+| **C. Alkemio server-side call** | No infrastructure routing changes | Requires modifying the Alkemio server (separate repo/team). Couples kratos-webhooks to server release cycle. | Breaks service boundary; kratos-webhooks should be self-contained |
 | **D. Traefik custom middleware** | Would intercept at the right point | Requires writing/deploying a custom Traefik plugin. More complex than a Go HTTP handler. | Over-engineered for the use case |
 | **E. Wait for Kratos #3580** | Clean native integration | Unknown timeline. Feature blocked indefinitely. | Unacceptable delivery risk |
 
@@ -48,16 +48,16 @@ The after-login Kratos webhook (native, fires on success) resets counters when a
 
 **Positive:**
 - Full access to both identifier and client IP at credential submission time
-- Self-contained within webhook-gateway — no changes to Kratos, Alkemio server, or other services
+- Self-contained within kratos-webhooks — no changes to Kratos, Alkemio server, or other services
 - Transparent to Kratos — allowed requests are proxied unchanged
 - Supports both browser (form POST) and API (JSON POST) clients
 - Counter reset on success works via native Kratos after-login webhook
-- If Kratos adds issue #3580, the proxy can be replaced with a native hook without changing the webhook-gateway's core logic (service.go, Redis operations remain the same)
+- If Kratos adds issue #3580, the proxy can be replaced with a native hook without changing the kratos-webhooks's core logic (service.go, Redis operations remain the same)
 
 **Negative:**
-- Adds a network hop (Traefik → webhook-gateway → Kratos instead of Traefik → Kratos)
+- Adds a network hop (Traefik → kratos-webhooks → Kratos instead of Traefik → Kratos)
 - Traefik routing configuration required (priority-based router for login paths)
-- The webhook-gateway must know Kratos's internal URL (`KratosInternalURL` config)
+- The kratos-webhooks must know Kratos's internal URL (`KratosInternalURL` config)
 - IP counter reset on successful login depends on `True-Client-Ip` header availability in Kratos webhook context (see known limitation below)
 
 **Known limitation:** The Kratos after-login webhook's `ctx.request_headers` only includes headers in Kratos's default allowlist. `True-Client-Ip` is allowed but `X-Forwarded-For` is not. In environments without Cloudflare (which sets `True-Client-Ip`), the IP counter is not reset on successful login — only the identifier counter is reset. The IP counter still expires naturally via TTL.
@@ -71,12 +71,12 @@ Validated end-to-end on 2026-02-26 against a running Kratos v1.3.1 instance:
 
 2. **Blocking works at threshold:**
    - 11th attempt → proxy returns 429/303 (blocked), Kratos never receives the request
-   - Confirmed via webhook-gateway logs: `"login attempt blocked"`, `identifier_attempts: 11`
+   - Confirmed via kratos-webhooks logs: `"login attempt blocked"`, `identifier_attempts: 11`
 
 3. **After-login webhook fires on success and resets identifier counter:**
    - Successful login with correct password → Kratos calls `POST /api/v1/webhooks/kratos/login-backoff/after-login`
    - Redis `login_backoff:id:admin@alkem.io` key deleted (counter reset)
-   - Confirmed via webhook-gateway logs: `"login backoff counters reset"`
+   - Confirmed via kratos-webhooks logs: `"login backoff counters reset"`
 
 4. **Post-reset, new failures start from zero:**
    - 5 more wrong-password attempts after reset → Redis `login_backoff:id:admin@alkem.io = 5` (fresh counter)

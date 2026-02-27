@@ -8,8 +8,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/clients"
-	"github.com/alkem-io/webhook-gateway/internal/config"
+	"github.com/alkem-io/kratos-webhooks/internal/clients"
+	"github.com/alkem-io/kratos-webhooks/internal/config"
 )
 
 // RedisHelper defines the Redis operations needed by the login backoff service.

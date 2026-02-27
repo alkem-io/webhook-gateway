@@ -14,7 +14,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/middleware"
+	"github.com/alkem-io/kratos-webhooks/internal/middleware"
 )
 
 // kratosLoginBody represents the fields we need from a Kratos login POST.

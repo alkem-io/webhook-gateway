@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add login brute force protection to the webhook-gateway with two endpoints: a before-login check that increments counters and enforces lockout thresholds, and an after-login reset that clears counters on successful authentication. State is tracked in Redis using atomic Lua scripts for race-free counter management with TTL-based expiry. The design follows the existing webhook segregation pattern (`internal/webhooks/kratos-login-backoff/`).
+Add login brute force protection to the kratos-webhooks with two endpoints: a before-login check that increments counters and enforces lockout thresholds, and an after-login reset that clears counters on successful authentication. State is tracked in Redis using atomic Lua scripts for race-free counter management with TTL-based expiry. The design follows the existing webhook segregation pattern (`internal/webhooks/kratos-login-backoff/`).
 
 **Critical finding from research**: Kratos v1.3.1 `before` hooks fire at login flow initialization (page load), not at credential submission. The before-login endpoint must be called by an integration layer (reverse proxy or application server) at submission time, not by a Kratos before-hook. The after-login endpoint works as designed via Kratos webhook. See [research.md](./research.md) R-001 for full analysis.
 
@@ -16,7 +16,7 @@ Add login brute force protection to the webhook-gateway with two endpoints: a be
 **Storage**: Redis (existing client in `internal/clients/redis.go`)
 **Testing**: `go test -v -race ./...` (existing pattern)
 **Target Platform**: Linux container (Kubernetes)
-**Project Type**: Single backend service (existing webhook-gateway)
+**Project Type**: Single backend service (existing kratos-webhooks)
 **Performance Goals**: <100ms before-login response (FR-013) - achievable via single Redis round-trip using Lua script
 **Constraints**: Fail-open on Redis failure; no new external dependencies; endpoints callable from multiple integration points
 **Scale/Scope**: Two new webhook endpoints, one reverse proxy handler, one new webhook package, config extensions, Redis operation additions, Traefik routing, client-web lockout display
@@ -107,7 +107,7 @@ Counter TTL is set on the first increment only (not refreshed on subsequent incr
 
 ### D-003: Caller-Agnostic Endpoints
 
-Endpoints accept identifier and/or IP as optional fields, returning simple JSON responses. The integration layer (Kratos hook, proxy, or application server) is responsible for calling the endpoint at the right time and adapting the response format if needed. This decouples the webhook-gateway logic from Kratos-specific hook timing limitations.
+Endpoints accept identifier and/or IP as optional fields, returning simple JSON responses. The integration layer (Kratos hook, proxy, or application server) is responsible for calling the endpoint at the right time and adapting the response format if needed. This decouples the kratos-webhooks logic from Kratos-specific hook timing limitations.
 
 ### D-004: Partial Data Support
 
@@ -122,7 +122,7 @@ When both identifier and IP exceed their thresholds, the lockout with the longer
 
 ### D-006: Built-in Reverse Proxy
 
-Research R-001 identified that Kratos before-hooks cannot intercept credential submissions. Rather than leaving the integration layer as an external infrastructure concern, the webhook-gateway includes a built-in reverse proxy (`proxy.go`) using Go's `httputil.ReverseProxy`. Traefik routes login traffic (`/ory/kratos/public/self-service/login*`) to the webhook-gateway, which checks backoff on POST requests and proxies all requests (allowed POSTs + all GETs) to Kratos via `KratosInternalURL`. This keeps the entire backoff flow self-contained within the webhook-gateway.
+Research R-001 identified that Kratos before-hooks cannot intercept credential submissions. Rather than leaving the integration layer as an external infrastructure concern, the kratos-webhooks includes a built-in reverse proxy (`proxy.go`) using Go's `httputil.ReverseProxy`. Traefik routes login traffic (`/ory/kratos/public/self-service/login*`) to the kratos-webhooks, which checks backoff on POST requests and proxies all requests (allowed POSTs + all GETs) to Kratos via `KratosInternalURL`. This keeps the entire backoff flow self-contained within the kratos-webhooks.
 
 ### D-007: Browser vs API Response Differentiation
 

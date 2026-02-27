@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alkem-io/webhook-gateway/internal/clients"
+	"github.com/alkem-io/kratos-webhooks/internal/clients"
 )
 
 // Response is the response for liveness check.

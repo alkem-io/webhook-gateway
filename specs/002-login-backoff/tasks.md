@@ -124,7 +124,7 @@
 - [X] T017 [US1] Create reverse proxy handler in internal/webhooks/kratos-login-backoff/proxy.go: implement NewLoginProxy(kratosURL, service, logger) using httputil.NewSingleHostReverseProxy, intercept POST requests to extract identifier from JSON/form body and client IP from headers (True-Client-Ip, X-Forwarded-For, X-Real-Ip, RemoteAddr), check backoff via service.CheckAndIncrement, return 429 JSON for API clients or 303 redirect to /login?lockout=true&retry_after=N for browser clients (Accept: text/html), proxy allowed requests and all GET requests to Kratos
 - [X] T018 [US1] Add KratosInternalURL config field (env: KRATOS_INTERNAL_URL, default: http://kratos:4433) to internal/config/config.go and KRATOS_INTERNAL_URL to configs/.env.example
 - [X] T019 [US1] Wire login proxy routes in cmd/server/main.go: register /self-service/login and /self-service/login/ handlers using NewLoginProxy with cfg.KratosInternalURL
-- [X] T020 [US1] Add webhook-gateway service and kratos-login-backoff router (priority 200) to server/.build/traefik/http.yml, add KRATOS_INTERNAL_URL env to webhook-gateway in server/quickstart-services.yml
+- [X] T020 [US1] Add kratos-webhooks service and kratos-login-backoff router (priority 200) to server/.build/traefik/http.yml, add KRATOS_INTERNAL_URL env to kratos-webhooks in server/quickstart-services.yml
 
 ---
 

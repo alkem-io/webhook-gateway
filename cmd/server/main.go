@@ -12,12 +12,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/clients"
-	"github.com/alkem-io/webhook-gateway/internal/config"
-	"github.com/alkem-io/webhook-gateway/internal/health"
-	"github.com/alkem-io/webhook-gateway/internal/middleware"
-	kratosloginbackoff "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-login-backoff"
-	kratosverification "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-verification"
+	"github.com/alkem-io/kratos-webhooks/internal/clients"
+	"github.com/alkem-io/kratos-webhooks/internal/config"
+	"github.com/alkem-io/kratos-webhooks/internal/health"
+	"github.com/alkem-io/kratos-webhooks/internal/middleware"
+	kratosloginbackoff "github.com/alkem-io/kratos-webhooks/internal/webhooks/kratos-login-backoff"
+	kratosverification "github.com/alkem-io/kratos-webhooks/internal/webhooks/kratos-verification"
 )
 
 func main() {
