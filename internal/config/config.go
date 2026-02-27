@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 
@@ -67,7 +68,30 @@ func Load() (*Config, error) {
 		KratosInternalURL: resolveKratosURL(),
 	}
 
+	if err := validateLoginBackoffConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+func validateLoginBackoffConfig(cfg *Config) error {
+	if cfg.LoginBackoffMaxIdentifierAttempts <= 0 {
+		return fmt.Errorf("LOGIN_BACKOFF_MAX_IDENTIFIER_ATTEMPTS must be > 0")
+	}
+	if cfg.LoginBackoffMaxIPAttempts <= 0 {
+		return fmt.Errorf("LOGIN_BACKOFF_MAX_IP_ATTEMPTS must be > 0")
+	}
+	if cfg.LoginBackoffIdentifierLockoutSeconds <= 0 {
+		return fmt.Errorf("LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS must be > 0")
+	}
+	if cfg.LoginBackoffIPLockoutSeconds <= 0 {
+		return fmt.Errorf("LOGIN_BACKOFF_IP_LOCKOUT_SECONDS must be > 0")
+	}
+	if _, err := url.ParseRequestURI(cfg.KratosInternalURL); err != nil {
+		return fmt.Errorf("invalid KRATOS_INTERNAL_URL: %w", err)
+	}
+	return nil
 }
 
 // resolveKratosURL returns the Kratos public API URL.

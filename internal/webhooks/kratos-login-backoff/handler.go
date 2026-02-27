@@ -69,8 +69,8 @@ func (h *Handler) HandleAfterLogin(w http.ResponseWriter, r *http.Request) {
 			zap.String("correlation_id", correlationID),
 		)
 		h.respondJSON(w, http.StatusOK, AfterLoginResponse{
-			Status:  StatusSuccess,
-			Message: "counters reset",
+			Status:  StatusSkipped,
+			Message: "invalid payload; reset skipped",
 		})
 		return
 	}

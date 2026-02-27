@@ -40,7 +40,7 @@ make tidy         # Run go mod tidy
 Go 1.24: Follow standard conventions
 
 ## Recent Changes
-- 002-login-backoff: Added Go 1.24 + go.uber.org/zap (logging), github.com/redis/go-redis/v9 (Redis) - both existing, no new dependencies
+- 002-login-backoff: Uses Go 1.24 + go.uber.org/zap (logging) and github.com/redis/go-redis/v9 (Redis); no new dependencies introduced
 
 - 001-kratos-verification-webhook: Added Go 1.24 + go.uber.org/zap (logging), github.com/redis/go-redis/v9 (Redis), github.com/rabbitmq/amqp091-go (RabbitMQ), github.com/joho/godotenv (config)
 

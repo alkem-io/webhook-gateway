@@ -124,8 +124,8 @@ paths:
         Called by Kratos after-login webhook after successful password authentication.
         Resets the failed attempt counters for the provided identifier and client IP.
 
-        Always returns HTTP 200 (fail-open). Errors in counter reset are logged
-        but do not affect the response.
+        Returns HTTP 200 in normal operation (including fail-open reset errors).
+        When global maintenance mode is enabled, the gateway may return HTTP 503.
       operationId: loginBackoffAfterLogin
       requestBody:
         required: true

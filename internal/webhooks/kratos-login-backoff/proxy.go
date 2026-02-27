@@ -3,8 +3,10 @@ package kratosloginbackoff
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,6 +32,8 @@ func NewLoginProxy(kratosURL string, service *Service, logger *zap.Logger) http.
 
 	proxy := httputil.NewSingleHostReverseProxy(target) //nolint:gosec // target is from trusted config
 
+	const maxLoginRequestBodyBytes int64 = 1 << 20 // 1 MiB
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		correlationID := middleware.GetCorrelationID(r.Context())
 
@@ -39,10 +43,16 @@ func NewLoginProxy(kratosURL string, service *Service, logger *zap.Logger) http.
 			return
 		}
 
-		// Read body so we can inspect it and still forward it
-		bodyBytes, err := io.ReadAll(r.Body)
-		_ = r.Body.Close()
+		// Read body so we can inspect it and still forward it (bounded to 1 MiB)
+		bodyReader := http.MaxBytesReader(w, r.Body, maxLoginRequestBodyBytes)
+		bodyBytes, err := io.ReadAll(bodyReader)
+		_ = bodyReader.Close()
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+				return
+			}
 			logger.Warn("failed to read login request body, proxying without backoff check",
 				zap.Error(err),
 				zap.String("correlation_id", correlationID),
@@ -142,30 +152,35 @@ func isBrowserRequest(r *http.Request) bool {
 }
 
 // extractClientIP gets the client IP from headers or RemoteAddr.
+// All candidate IPs are validated with net.ParseIP to ensure well-formed Redis keys.
 func extractClientIP(r *http.Request) string {
-	// Check True-Client-Ip first (Cloudflare-style)
-	if ip := r.Header.Get("True-Client-Ip"); ip != "" {
+	if ip := firstValidIP(r.Header.Get("True-Client-Ip")); ip != "" {
 		return ip
 	}
 
-	// Check X-Forwarded-For
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP (original client)
-		if idx := strings.IndexByte(xff, ','); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+	if ip := firstValidIP(r.Header.Get("X-Forwarded-For")); ip != "" {
+		return ip
+	}
+
+	if ip := firstValidIP(r.Header.Get("X-Real-Ip")); ip != "" {
+		return ip
+	}
+
+	// Fall back to RemoteAddr — use net.SplitHostPort for IPv6 safety
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return strings.Trim(host, "[]")
+	}
+	return strings.Trim(strings.TrimSpace(r.RemoteAddr), "[]")
+}
+
+// firstValidIP splits a comma-separated header value and returns the first valid IP.
+func firstValidIP(raw string) string {
+	for _, part := range strings.Split(raw, ",") {
+		ip := strings.Trim(strings.TrimSpace(part), "[]")
+		if net.ParseIP(ip) != nil {
+			return ip
 		}
-		return strings.TrimSpace(xff)
 	}
-
-	// Check X-Real-Ip
-	if ip := r.Header.Get("X-Real-Ip"); ip != "" {
-		return ip
-	}
-
-	// Fall back to RemoteAddr (strip port)
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
+	return ""
 }

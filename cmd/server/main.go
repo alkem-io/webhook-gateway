@@ -65,6 +65,9 @@ func main() {
 	mux.HandleFunc("POST /api/v1/webhooks/kratos/verification", webhookHandler.HandleVerification)
 
 	// Login backoff endpoints
+	// TODO: These webhook endpoints mutate lockout counters and should be restricted to
+	// trusted callers only (Kratos pods). Enforce via Kubernetes NetworkPolicy at minimum;
+	// consider adding application-layer auth (mTLS or shared API key) for defense in depth.
 	loginBackoffService := kratosloginbackoff.NewService(redisClient, cfg, logger)
 	loginBackoffHandler := kratosloginbackoff.NewHandler(loginBackoffService, logger)
 	mux.HandleFunc("POST /api/v1/webhooks/kratos/login-backoff/before-login", loginBackoffHandler.HandleBeforeLogin)

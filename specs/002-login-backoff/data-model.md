@@ -126,7 +126,7 @@ Deletes both keys atomically. Used by the after-login handler on successful auth
 
 ## State Transitions
 
-```
+```text
                     ┌─────────────────────────────────┐
                     │     No Counter (key absent)      │
                     │     State: CLEAN                 │
