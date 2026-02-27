@@ -1,83 +1,35 @@
 openapi: 3.0.3
 info:
-  title: Alkemio Webhook Gateway API
+  title: Login Backoff Webhook Endpoints
   description: |
-    HTTP webhook gateway service that receives webhooks from external systems
-    and publishes notification events to the Alkemio platform.
+    Login brute force protection endpoints for the Alkemio Webhook Gateway.
+
+    Two endpoints handle the login backoff lifecycle:
+    - **before-login**: Called before each login attempt to check lockout status and increment counters.
+    - **after-login**: Called after successful password authentication to reset counters.
+
+    The before-login endpoint is designed to be called by any integration layer
+    that can provide the identifier and client IP at credential submission time.
+
+    Additionally, the webhook-gateway includes a built-in reverse proxy that
+    intercepts Kratos login POST submissions (routed via Traefik on
+    `/self-service/login`). The proxy extracts identifier and client IP from
+    the request body/headers, checks backoff, and returns HTTP 429 (API) or
+    HTTP 303 redirect to `/login?lockout=true&retry_after=N` (browser) when blocked.
+
+    The after-login endpoint is called by a Kratos after-login webhook hook
+    configured with a Jsonnet template that extracts identity and IP information.
   version: 1.0.0
-  contact:
-    name: Alkemio Team
 
 servers:
   - url: http://webhook-gateway:8080
     description: Internal Kubernetes service
 
 tags:
-  - name: webhooks
-    description: Webhook endpoints for external systems
   - name: login-backoff
     description: Login brute force protection endpoints
-  - name: health
-    description: Health check endpoints
 
 paths:
-  /api/v1/webhooks/kratos/verification:
-    post:
-      tags:
-        - webhooks
-      summary: Ory Kratos post-verification webhook
-      description: |
-        Receives webhook after successful email verification in Ory Kratos.
-        Publishes a UserSignupWelcome notification event to RabbitMQ.
-
-        **Important**: This endpoint always returns HTTP 200 to Kratos, even if
-        notification processing fails. This ensures the verification flow is not blocked.
-      operationId: kratosVerificationWebhook
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KratosVerificationPayload'
-            example:
-              identity_id: "550e8400-e29b-41d4-a716-446655440000"
-              email: "john@example.com"
-              display_name: "John Doe"
-              first_name: "John"
-      responses:
-        '200':
-          description: Webhook received and processed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WebhookResponse'
-              examples:
-                success:
-                  summary: Notification sent
-                  value:
-                    status: "success"
-                skipped_duplicate:
-                  summary: Duplicate webhook (welcome already sent)
-                  value:
-                    status: "skipped"
-                    message: "welcome email already sent for this identity"
-                skipped_missing_traits:
-                  summary: Missing required traits
-                  value:
-                    status: "skipped"
-                    message: "missing required traits: first_name"
-        '503':
-          description: Service unavailable (maintenance mode)
-          headers:
-            Retry-After:
-              schema:
-                type: integer
-              description: Seconds until retry is recommended
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MaintenanceResponse'
-
   /api/v1/webhooks/kratos/login-backoff/before-login:
     post:
       tags:
@@ -91,8 +43,11 @@ paths:
         If locked out, returns HTTP 403 with lockout details.
         If allowed, returns HTTP 200 with current attempt counts.
 
-        Fail-open: If Redis is unavailable or input is malformed, returns HTTP 200
-        (login allowed) and logs a warning.
+        Fail-open: If Redis is unavailable, returns HTTP 200 (login allowed)
+        and logs a warning.
+
+        At least one of `identifier` or `client_ip` should be provided.
+        If neither is present, the request is skipped (allowed) with a warning.
       operationId: loginBackoffBeforeLogin
       requestBody:
         required: true
@@ -112,7 +67,7 @@ paths:
                 value:
                   identifier: "user@example.com"
               ip_only:
-                summary: Only client IP provided
+                summary: Only client IP provided (e.g., from Kratos before-hook)
                 value:
                   flow_id: "550e8400-e29b-41d4-a716-446655440000"
                   client_ip: "192.168.1.100"
@@ -169,8 +124,8 @@ paths:
         Called by Kratos after-login webhook after successful password authentication.
         Resets the failed attempt counters for the provided identifier and client IP.
 
-        Always returns HTTP 200 (fail-open). Errors in counter reset are logged
-        but do not affect the response.
+        Returns HTTP 200 in normal operation (including fail-open reset errors).
+        When global maintenance mode is enabled, the gateway may return HTTP 503.
       operationId: loginBackoffAfterLogin
       requestBody:
         required: true
@@ -212,137 +167,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/MaintenanceResponse'
 
-  /health/live:
-    get:
+  /self-service/login:
+    post:
       tags:
-        - health
-      summary: Liveness probe
-      description: Returns 200 if the service is running.
-      operationId: healthLive
-      responses:
-        '200':
-          description: Service is alive
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-              example:
-                status: "ok"
-                timestamp: "2026-01-26T10:30:45Z"
-
-  /health/ready:
-    get:
-      tags:
-        - health
-      summary: Readiness probe
+        - login-backoff
+      summary: Reverse proxy for Kratos login with backoff enforcement
       description: |
-        Returns 200 if the service is ready to accept traffic.
-        Checks connectivity to Redis and RabbitMQ.
-      operationId: healthReady
+        Intercepts Kratos login credential submissions. Extracts identifier
+        from JSON or form-encoded body and client IP from headers. Checks
+        backoff thresholds. If allowed, proxies the request to Kratos. If
+        blocked, returns 429 (API) or 303 redirect (browser).
+
+        Routed via Traefik: `/ory/kratos/public/self-service/login*` strips
+        prefix and forwards to webhook-gateway.
+      operationId: loginProxy
       responses:
         '200':
-          description: Service is ready
+          description: Proxied response from Kratos (login allowed, forwarded to Kratos)
+        '303':
+          description: Browser lockout redirect to `/login?lockout=true&retry_after=N`
+        '429':
+          description: API lockout response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReadinessResponse'
-              example:
-                status: "ok"
-                redis: "connected"
-                rabbitmq: "connected"
-                timestamp: "2026-01-26T10:30:45Z"
-        '503':
-          description: Service not ready
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReadinessResponse'
-              example:
-                status: "unhealthy"
-                redis: "disconnected"
-                rabbitmq: "connected"
-                timestamp: "2026-01-26T10:30:45Z"
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        enum: [429]
+                      status:
+                        type: string
+                        enum: ["Too Many Requests"]
+                      reason:
+                        type: string
+                        enum: [identifier, ip]
+                      message:
+                        type: string
+    get:
+      tags:
+        - login-backoff
+      summary: Proxy GET requests to Kratos (flow creation)
+      description: |
+        GET requests (e.g., `/self-service/login/browser`, `/self-service/login/api`)
+        are proxied directly to Kratos without backoff interception.
+      operationId: loginProxyGet
+      responses:
+        '200':
+          description: Proxied response from Kratos
+        '303':
+          description: Kratos redirect (browser flow creation)
 
 components:
   schemas:
-    KratosVerificationPayload:
-      type: object
-      description: Webhook payload from Ory Kratos after email verification
-      required:
-        - identity_id
-        - email
-        - display_name
-        - first_name
-      properties:
-        identity_id:
-          type: string
-          format: uuid
-          description: Kratos identity UUID
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        email:
-          type: string
-          format: email
-          description: Verified email address
-          example: "john@example.com"
-        display_name:
-          type: string
-          description: User's display name
-          example: "John Doe"
-        first_name:
-          type: string
-          description: User's first name
-          example: "John"
-
-    WebhookResponse:
-      type: object
-      description: Response to webhook invocation
-      required:
-        - status
-      properties:
-        status:
-          type: string
-          enum: [success, skipped, error]
-          description: Processing status
-        message:
-          type: string
-          description: Optional message explaining the status
-
-    HealthResponse:
-      type: object
-      description: Basic health check response
-      required:
-        - status
-        - timestamp
-      properties:
-        status:
-          type: string
-          enum: [ok, degraded, unhealthy]
-        timestamp:
-          type: string
-          format: date-time
-
-    ReadinessResponse:
-      type: object
-      description: Readiness check response with dependency status
-      required:
-        - status
-        - redis
-        - rabbitmq
-        - timestamp
-      properties:
-        status:
-          type: string
-          enum: [ok, degraded, unhealthy]
-        redis:
-          type: string
-          enum: [connected, disconnected]
-        rabbitmq:
-          type: string
-          enum: [connected, disconnected]
-        timestamp:
-          type: string
-          format: date-time
-
     BeforeLoginRequest:
       type: object
       description: |
@@ -452,4 +332,3 @@ components:
           enum: [unavailable]
         message:
           type: string
-          description: Maintenance message

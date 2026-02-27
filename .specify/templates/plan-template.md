@@ -44,6 +44,8 @@ specs/[###-feature]/
 ├── data-model.md        # Phase 1 output (/speckit.plan command)
 ├── quickstart.md        # Phase 1 output (/speckit.plan command)
 ├── contracts/           # Phase 1 output (/speckit.plan command)
+├── decisions/           # ADRs for significant architectural choices (Constitution #17)
+│   └── ADR-001-*.md     # Created during/after implementation when decisions are validated
 └── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 

@@ -1,25 +1,33 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: v1.0.0 → v1.1.0
+Version change: v1.1.0 → v1.2.0
 Changes:
-  - Added principle #16: "Webhook Segregation" for clear code organization per webhook
-  - Updated Architecture Standards with webhook-specific folder structure pattern
+  - Added principle #17: "Architecture Decision Records (ADRs)" requiring formal ADRs for significant technical decisions
+  - Added ADR template (.specify/templates/adr-template.md)
+  - Added master decision log (docs/adr.md) as single entry point for all ADRs
+  - Updated Architecture Standards with ADR directory convention and master index
+  - Updated Engineering Workflow with ADR creation step
   - MINOR bump: new principle added
 
+Previous version change: v1.0.0 → v1.1.0
+  - Added principle #16: "Webhook Segregation" for clear code organization per webhook
+  - Updated Architecture Standards with webhook-specific folder structure pattern
+
 Templates requiring updates:
-  - .specify/templates/plan-template.md: ✅ No changes needed (Constitution Check is generic)
-  - .specify/templates/spec-template.md: ✅ No changes needed (requirements format compatible)
-  - .specify/templates/tasks-template.md: ✅ No changes needed (task structure compatible)
+  - .specify/templates/adr-template.md: ✅ Created (new template)
+  - .specify/templates/plan-template.md: ✅ Updated (added ADR to documentation structure)
+  - .specify/templates/spec-template.md: ✅ No changes needed
+  - .specify/templates/tasks-template.md: ✅ No changes needed
 
 Follow-up TODOs: None
 -->
 
 # Alkemio Webhook Gateway Service Engineering Constitution
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Ratification Date**: 2025-11-01
-**Last Amended**: 2026-01-26
+**Last Amended**: 2026-02-26
 
 ## Core Principles
 
@@ -96,6 +104,14 @@ Follow-up TODOs: None
     - A developer navigating to a webhook folder MUST be able to understand that webhook's complete behaviour without reading unrelated webhook code.
     - Adding a new webhook MUST NOT require modifying existing webhook folders beyond shared registration/routing.
 
+17. **Architecture Decision Records (ADRs)**
+    - Significant architectural decisions MUST be captured as numbered ADR documents in `specs/<feature>/decisions/`.
+    - Every ADR MUST be indexed in the master decision log at `docs/adr.md`. This is the single entry point for discovering all architectural decisions across the service.
+    - An ADR is required when a decision: (a) introduces or changes infrastructure patterns, (b) selects one approach over viable alternatives with meaningful trade-offs, (c) constrains future design choices, or (d) is non-obvious and would otherwise rely on tribal knowledge.
+    - Each ADR MUST include: context (why the decision was needed), decision (what was chosen), alternatives considered (what was rejected and why), consequences (positive and negative), and empirical validation (evidence that the decision is correct, not just theoretical reasoning).
+    - ADRs are immutable once accepted. If a decision is reversed, a new ADR supersedes the original (linking back to it) rather than editing it.
+    - Research findings (research.md) document investigation outcomes. ADRs document architectural commitments. A research finding MAY lead to an ADR when it results in a binding design choice.
+
 ## Architecture Standards
 
 - Directory layout:
@@ -109,6 +125,8 @@ Follow-up TODOs: None
   - `pkg/telemetry`: shared logging utilities safe for reuse.
   - `configs/`: sample environment files and documentation.
   - `contracts/`: OpenAPI definitions and generated fixtures.
+  - `specs/<feature>/decisions/`: ADR documents for significant architectural choices within a feature.
+  - `docs/adr.md`: master index of all ADRs across features — single entry point for architectural decisions.
   - `docs/`: operational runbooks and quickstarts.
 - Health endpoints (`/health/live`, `/health/ready`) MUST satisfy constitution observability principle with structured JSON responses.
 - Maintenance middleware MUST short-circuit request handling while still recording structured logs.
@@ -116,7 +134,7 @@ Follow-up TODOs: None
 
 ## Engineering Workflow
 
-- Execute Spec Kit phases sequentially: research → design → tasks → implementation → analysis → validation.
+- Execute Spec Kit phases sequentially: research → design → tasks → implementation → analysis → validation. ADRs are created during or after implementation when significant architectural decisions are made or empirically validated.
 - Tests (`go test ./...`) MUST pass before merging. Contract tests run under `test/contract`; integration tests use `httptest` with mocked clients.
 - Any change to OpenAPI contracts requires regenerating associated fixtures and reviewing downstream consumers.
 - Release bumps require update to `docs/operations.md` and changelog entry summarizing risk.
@@ -124,7 +142,7 @@ Follow-up TODOs: None
 
 ## Governance
 
-- **Constitution Version**: 1.1.0
+- **Constitution Version**: 1.2.0
 - **Versioning Policy**: Semantic versioning (MAJOR.MINOR.PATCH)
   - MAJOR: Backward incompatible governance/principle removals or redefinitions.
   - MINOR: New principle/section added or materially expanded guidance.

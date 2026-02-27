@@ -12,7 +12,49 @@ import (
 const (
 	// WelcomeSentTTL is the TTL for welcome_sent keys (90 days).
 	WelcomeSentTTL = 90 * 24 * time.Hour
+
+	// LoginBackoffIdentifierPrefix is the Redis key prefix for per-identifier login attempt counters.
+	LoginBackoffIdentifierPrefix = "login_backoff:id:"
+
+	// LoginBackoffIPPrefix is the Redis key prefix for per-IP login attempt counters.
+	LoginBackoffIPPrefix = "login_backoff:ip:"
 )
+
+// loginBackoffSingleKeyScript atomically increments a counter and sets TTL on first increment.
+// Returns {count, remaining_ttl}.
+var loginBackoffSingleKeyScript = redis.NewScript(`
+local key = KEYS[1]
+local ttl_seconds = tonumber(ARGV[1])
+local count = redis.call('INCR', key)
+if count == 1 then
+    redis.call('EXPIRE', key, ttl_seconds)
+end
+local remaining = redis.call('TTL', key)
+return {count, remaining}
+`)
+
+// loginBackoffTwoKeyScript atomically increments both identifier and IP counters.
+// Returns {id_count, id_remaining, ip_count, ip_remaining}.
+var loginBackoffTwoKeyScript = redis.NewScript(`
+local id_key = KEYS[1]
+local ip_key = KEYS[2]
+local id_ttl = tonumber(ARGV[1])
+local ip_ttl = tonumber(ARGV[2])
+
+local id_count = redis.call('INCR', id_key)
+if id_count == 1 then
+    redis.call('EXPIRE', id_key, id_ttl)
+end
+local id_remaining = redis.call('TTL', id_key)
+
+local ip_count = redis.call('INCR', ip_key)
+if ip_count == 1 then
+    redis.call('EXPIRE', ip_key, ip_ttl)
+end
+local ip_remaining = redis.call('TTL', ip_key)
+
+return {id_count, id_remaining, ip_count, ip_remaining}
+`)
 
 // RedisClient wraps the Redis client with application-specific operations.
 type RedisClient struct {
@@ -57,4 +99,69 @@ func (c *RedisClient) MarkWelcomeSent(ctx context.Context, identityID string) er
 	key := fmt.Sprintf("welcome_sent:%s", identityID)
 	value := time.Now().UTC().Format(time.RFC3339)
 	return c.client.Set(ctx, key, value, WelcomeSentTTL).Err()
+}
+
+// IncrementLoginAttempts atomically increments both identifier and IP login attempt counters.
+// Returns (idCount, idRemaining, ipCount, ipRemaining, error).
+func (c *RedisClient) IncrementLoginAttempts(ctx context.Context, identifier, ip string, idTTLSeconds, ipTTLSeconds int) (int64, int64, int64, int64, error) {
+	idKey := LoginBackoffIdentifierPrefix + identifier
+	ipKey := LoginBackoffIPPrefix + ip
+
+	result, err := loginBackoffTwoKeyScript.Run(ctx, c.client,
+		[]string{idKey, ipKey},
+		idTTLSeconds, ipTTLSeconds,
+	).Int64Slice()
+	if err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("failed to increment login attempts: %w", err)
+	}
+
+	return result[0], result[1], result[2], result[3], nil
+}
+
+// IncrementIdentifierAttempt atomically increments the identifier login attempt counter.
+// Returns (count, remaining, error).
+func (c *RedisClient) IncrementIdentifierAttempt(ctx context.Context, identifier string, ttlSeconds int) (int64, int64, error) {
+	key := LoginBackoffIdentifierPrefix + identifier
+
+	result, err := loginBackoffSingleKeyScript.Run(ctx, c.client,
+		[]string{key},
+		ttlSeconds,
+	).Int64Slice()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to increment identifier attempt: %w", err)
+	}
+
+	return result[0], result[1], nil
+}
+
+// IncrementIPAttempt atomically increments the IP login attempt counter.
+// Returns (count, remaining, error).
+func (c *RedisClient) IncrementIPAttempt(ctx context.Context, ip string, ttlSeconds int) (int64, int64, error) {
+	key := LoginBackoffIPPrefix + ip
+
+	result, err := loginBackoffSingleKeyScript.Run(ctx, c.client,
+		[]string{key},
+		ttlSeconds,
+	).Int64Slice()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to increment IP attempt: %w", err)
+	}
+
+	return result[0], result[1], nil
+}
+
+// ResetLoginAttempts deletes identifier and/or IP login attempt counter keys.
+// Empty identifier or ip values are skipped to avoid deleting bare prefix keys.
+func (c *RedisClient) ResetLoginAttempts(ctx context.Context, identifier, ip string) error {
+	keys := make([]string, 0, 2)
+	if identifier != "" {
+		keys = append(keys, LoginBackoffIdentifierPrefix+identifier)
+	}
+	if ip != "" {
+		keys = append(keys, LoginBackoffIPPrefix+ip)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return c.client.Del(ctx, keys...).Err()
 }
