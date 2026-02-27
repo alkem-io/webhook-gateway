@@ -1,34 +1,36 @@
 # Alkemio Kratos Webhooks
 
-A Go HTTP service that receives webhooks from external systems and bridges them into the Alkemio platform's notification infrastructure. Currently handles Ory Kratos post-verification webhooks, publishing welcome notification events to RabbitMQ for downstream consumption.
+A Go HTTP service that receives webhooks from Ory Kratos and bridges them into the Alkemio platform's notification infrastructure. Handles post-verification welcome notifications and login brute-force protection.
 
 ## Architecture
 
 ```
 Ory Kratos ──POST──▶ Kratos Webhooks ──publish──▶ RabbitMQ (alkemio-notifications)
                            │
-                           ├── Redis (idempotency tracking)
+                           ├── Redis (idempotency + login rate limiting)
                            └── Structured logging (Zap)
 ```
 
-The gateway follows **fail-open semantics**: all webhook responses return HTTP 200 to avoid blocking the Kratos verification flow, regardless of downstream failures.
+The service follows **fail-open semantics**: webhook responses return HTTP 200 to avoid blocking Kratos flows, regardless of downstream failures. The login backoff endpoints are the exception — they return HTTP 403 when an account or IP is locked out.
 
 ## Project Structure
 
 ```
 cmd/
-  server/                          # Application entrypoint
+  server/                                # Application entrypoint
 configs/
-  .env.example                     # Example environment variables
+  .env.example                           # Example environment variables
 contracts/
-  openapi.yaml                     # OpenAPI 3.0 specification
+  openapi.yaml                           # OpenAPI 3.0 specification
 internal/
-  clients/                         # Redis and RabbitMQ client wrappers
-  config/                          # Configuration loading and logger setup
-  health/                          # Kubernetes liveness and readiness probes
-  middleware/                       # Correlation ID, logging, maintenance mode
+  clients/                               # Redis and RabbitMQ client wrappers
+  config/                                # Configuration loading and logger setup
+  health/                                # Kubernetes liveness and readiness probes
+  middleware/                             # Correlation ID, logging, maintenance mode
   webhooks/
-    kratos-verification/           # Kratos post-verification webhook handler
+    kratos-verification/                 # Post-verification webhook handler
+    kratos-login-backoff/                # Login brute-force protection
+manifests/                               # Kubernetes deployment manifests
 ```
 
 ## Prerequisites
@@ -69,12 +71,16 @@ All configuration is driven by environment variables. See `configs/.env.example`
 | `PORT` | `8080` | HTTP server port |
 | `LOG_LEVEL` | `info` | Logging level (`debug`, `info`, `warn`, `error`) |
 | `LOG_FORMAT` | `json` | Log format (`json` or `console`) |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string (takes precedence over host/port) |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | RabbitMQ connection string |
 | `PLATFORM_URL` | `https://alkem.io` | Base Alkemio platform URL |
 | `MAINTENANCE_MODE` | `false` | Enable maintenance mode (returns 503) |
 | `MAINTENANCE_MESSAGE` | `Service under maintenance` | Maintenance response message |
 | `CORRELATION_ID_HEADER` | `X-Request-ID` | HTTP header used for request tracing |
+| `LOGIN_BACKOFF_MAX_IDENTIFIER_ATTEMPTS` | `10` | Failed login attempts before per-identifier lockout |
+| `LOGIN_BACKOFF_MAX_IP_ATTEMPTS` | `20` | Failed login attempts before per-IP lockout |
+| `LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS` | `120` | Lockout duration per identifier |
+| `LOGIN_BACKOFF_IP_LOCKOUT_SECONDS` | `120` | Lockout duration per IP |
 
 ## API Endpoints
 
@@ -84,25 +90,74 @@ All configuration is driven by environment variables. See `configs/.env.example`
 
 Receives Kratos post-verification payloads. Always returns HTTP 200.
 
-Request body:
-
 ```json
+// Request
 {
   "identity_id": "uuid",
   "email": "user@example.com",
   "display_name": "Jane Doe",
   "first_name": "Jane"
 }
-```
 
-Response:
-
-```json
+// Response
 {
   "status": "success|skipped|error",
   "message": "optional explanation"
 }
 ```
+
+### Login Backoff
+
+**POST** `/api/v1/webhooks/kratos/login-backoff/before-login`
+
+Checks whether a login attempt should be allowed based on per-identifier and per-IP rate limits.
+
+Returns HTTP 200 if allowed:
+
+```json
+// Request
+{
+  "flow_id": "uuid",
+  "identifier": "user@example.com",
+  "client_ip": "192.168.1.100"
+}
+
+// Response (allowed)
+{
+  "status": "allowed",
+  "identifier_attempts": 2,
+  "ip_attempts": 5
+}
+```
+
+Returns HTTP 403 if locked out:
+
+```json
+{
+  "status": "blocked",
+  "reason": "identifier_locked|ip_locked",
+  "retry_after_seconds": 120
+}
+```
+
+**POST** `/api/v1/webhooks/kratos/login-backoff/after-login`
+
+Resets attempt counters after a successful login. Always returns HTTP 200.
+
+```json
+// Request
+{
+  "identity_id": "uuid",
+  "email": "user@example.com",
+  "client_ip": "192.168.1.100"
+}
+```
+
+### Login Proxy
+
+**POST** `/self-service/login`
+
+Reverse proxy that intercepts login submissions to Kratos, enabling pre-login backoff checks inline with the login flow.
 
 ### Health
 
@@ -135,23 +190,13 @@ make docker-run
 
 The container runs as a non-root user and exposes port 8080.
 
-## Processing Flow
-
-1. Receive and decode the Kratos webhook payload
-2. Validate required fields (skip with warning if invalid)
-3. Check Redis for duplicate delivery (skip if welcome already sent)
-4. Transform payload into a `UserSignupWelcomeEvent`
-5. Publish event to the `alkemio-notifications` RabbitMQ queue
-6. Mark identity as welcomed in Redis (90-day TTL)
-7. Return HTTP 200
-
 ## Middleware Stack
 
 Applied in order:
 
-1. **Correlation ID** - Extracts or generates a request trace ID
-2. **Maintenance** - Returns 503 when maintenance mode is enabled (health endpoints are exempt)
-3. **Logging** - Records request method, path, status code, and duration
+1. **Correlation ID** — Extracts or generates a request trace ID
+2. **Maintenance** — Returns 503 when maintenance mode is enabled (health endpoints are exempt)
+3. **Logging** — Records request method, path, status code, and duration
 
 ## License
 
