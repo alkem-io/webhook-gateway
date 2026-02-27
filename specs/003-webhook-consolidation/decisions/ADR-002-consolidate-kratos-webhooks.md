@@ -10,7 +10,7 @@ Ory Kratos webhooks are currently split across two services:
 
 | Service | Webhook Responsibility | Infrastructure |
 |---------|----------------------|----------------|
-| **webhook-gateway** | Verification event (→ RabbitMQ), login backoff (Redis counters + reverse proxy) | Redis, RabbitMQ |
+| **kratos-webhooks** | Verification event (→ RabbitMQ), login backoff (Redis counters + reverse proxy) | Redis, RabbitMQ |
 | **oidc-service** | Post-login/registration identity resolution (→ patches Kratos identity metadata via Admin API) | Postgres (reads), Kratos Admin API, Alkemio API |
 
 The oidc-service's primary responsibility is Hydra OAuth2 challenge handling (login/consent providers). Its Kratos webhook is a secondary concern that was added there because it already had the identity resolution wiring (Postgres access, Kratos Admin API client). This is a misplaced concern — Kratos webhook handling is not related to OAuth2 challenge flows.
@@ -25,7 +25,7 @@ This fragmentation causes concrete operational problems:
 
 ## Decision
 
-Consolidate all Kratos webhook handling into this repository (webhook-gateway), renaming it to **kratos-hooks** to reflect its expanded scope. The consolidation will be phased:
+Consolidate all Kratos webhook handling into this repository (**kratos-webhooks**). The consolidation will be phased:
 
 **Phase 1 — Absorb identity resolution webhook:**
 - Implement the post-login/registration identity resolution handler currently in oidc-service
@@ -37,9 +37,7 @@ Consolidate all Kratos webhook handling into this repository (webhook-gateway), 
 - Update Kratos Helm values to point all webhooks at the consolidated service
 - oidc-service retains only its primary responsibility: Hydra OAuth2 challenge handling
 
-**Phase 3 — Rename and re-brand:**
-- Rename the repository and Docker image from `webhook-gateway` to `kratos-hooks`
-- Update all deployment references (Helm charts, CI pipelines, monitoring dashboards)
+**Phase 3 — Complete (repository already renamed to `kratos-webhooks`).**
 
 ## Alternatives Considered
 
@@ -58,13 +56,13 @@ Consolidate all Kratos webhook handling into this repository (webhook-gateway), 
 - Single point for webhook authentication configuration
 - Cohesive domain — "what happens on Kratos events" is answered by reading one codebase
 - oidc-service becomes a clean, focused OAuth2 challenge handler
-- Shared infrastructure (Redis, RabbitMQ) is already wired in webhook-gateway
+- Shared infrastructure (Redis, RabbitMQ) is already wired in kratos-webhooks
 
 **Negative:**
 - Larger dependency footprint — the consolidated service gains Postgres (read), Kratos Admin API, and Alkemio API dependencies that it doesn't currently have
 - Increased blast radius — a bug in the consolidated service could affect all Kratos webhooks, not just a subset
-- Migration effort — phased rollout requires coordinated changes across webhook-gateway, oidc-service, and Kratos Helm values
-- Repository rename (`webhook-gateway` → `kratos-hooks`) requires updating CI pipelines, Docker registries, Helm charts, and documentation references
+- Migration effort — phased rollout requires coordinated changes across kratos-webhooks, oidc-service, and Kratos Helm values
+- Repository rename (already completed) required updating CI pipelines, Docker registries, Helm charts, and documentation references
 
 **Risk mitigation:**
 - Phased approach allows rollback at each phase — Phase 1 can run in parallel with the oidc-service handler (both active) before Phase 2 removes the old code
@@ -77,11 +75,11 @@ Pending — this is a proposed architectural change. Validation criteria for eac
 
 1. **Phase 1**: Identity resolution webhook handler passes the same integration tests as the oidc-service handler. Kratos identity metadata is correctly patched after login/registration.
 2. **Phase 2**: Kratos Helm values point exclusively at the consolidated service. oidc-service webhook code is deleted. No regressions in login/registration flows.
-3. **Phase 3**: All deployment references updated. CI/CD pipelines build and deploy `kratos-hooks`. Monitoring dashboards reflect the new service name.
+3. **Phase 3**: Complete — repository renamed to `kratos-webhooks`, all deployment references updated.
 
 ## References
 
-- [ADR-001: Reverse Proxy for Login Interception](../../002-login-backoff/decisions/ADR-001-reverse-proxy-for-login-interception.md) — existing webhook-gateway architectural decision
-- [webhook-gateway handlers](../../../internal/webhooks/) — current webhook implementations
-- [webhook-gateway Redis client](../../../internal/clients/redis.go) — existing shared infrastructure
+- [ADR-001: Reverse Proxy for Login Interception](../../002-login-backoff/decisions/ADR-001-reverse-proxy-for-login-interception.md) — existing kratos-webhooks architectural decision
+- [kratos-webhooks handlers](../../../internal/webhooks/) — current webhook implementations
+- [kratos-webhooks Redis client](../../../internal/clients/redis.go) — existing shared infrastructure
 - [Ory Kratos Webhooks Documentation](https://www.ory.sh/docs/kratos/hooks/configure-hooks) — hook configuration reference

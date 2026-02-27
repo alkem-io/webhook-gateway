@@ -1,11 +1,11 @@
-# Alkemio Webhook Gateway
+# Alkemio Kratos Webhooks
 
 A Go HTTP service that receives webhooks from external systems and bridges them into the Alkemio platform's notification infrastructure. Currently handles Ory Kratos post-verification webhooks, publishing welcome notification events to RabbitMQ for downstream consumption.
 
 ## Architecture
 
 ```
-Ory Kratos ──POST──▶ Webhook Gateway ──publish──▶ RabbitMQ (alkemio-notifications)
+Ory Kratos ──POST──▶ Kratos Webhooks ──publish──▶ RabbitMQ (alkemio-notifications)
                            │
                            ├── Redis (idempotency tracking)
                            └── Structured logging (Zap)
@@ -43,8 +43,8 @@ internal/
 1. Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/alkem-io/webhook-gateway.git
-cd webhook-gateway
+git clone https://github.com/alkem-io/kratos-webhooks.git
+cd kratos-webhooks
 go mod download
 ```
 
@@ -114,7 +114,7 @@ Response:
 ## Make Targets
 
 ```bash
-make build          # Compile binary to ./bin/webhook-gateway
+make build          # Compile binary to ./bin/kratos-webhooks
 make test           # Run tests with race detector
 make lint           # Run golangci-lint
 make run            # Run the server locally

@@ -34,9 +34,9 @@
 | C. Before-hook for IP only + no identifier tracking | Works with current Kratos hooks | Doesn't protect against distributed attacks on single account |
 | D. Wait for Kratos issue #3580 | Clean integration | Unknown timeline, blocks feature delivery |
 
-**Recommended approach**: **Option A or B** - Build the webhook-gateway endpoints to accept identifier and IP from any caller. The after-login hook (success) works as designed via Kratos webhook. The before-login check requires an integration layer (reverse proxy or server-side call) to be called at credential submission time.
+**Recommended approach**: **Option A or B** - Build the kratos-webhooks endpoints to accept identifier and IP from any caller. The after-login hook (success) works as designed via Kratos webhook. The before-login check requires an integration layer (reverse proxy or server-side call) to be called at credential submission time.
 
-**Implementation (2026-02-26)**: Option A was implemented as a built-in reverse proxy within the webhook-gateway (`proxy.go`). Traefik routes `/ory/kratos/public/self-service/login*` to the webhook-gateway (priority 200 router), which extracts identifier + IP from the Kratos login POST body/headers, checks backoff, and proxies allowed requests to Kratos via `KratosInternalURL`. This keeps the integration self-contained — no external proxy or Alkemio server changes needed. Browser requests that are blocked receive a 303 redirect to `/login?lockout=true&retry_after=N`, which the client-web LoginPage displays via the existing KratosMessages error UI.
+**Implementation (2026-02-26)**: Option A was implemented as a built-in reverse proxy within the kratos-webhooks (`proxy.go`). Traefik routes `/ory/kratos/public/self-service/login*` to the kratos-webhooks (priority 200 router), which extracts identifier + IP from the Kratos login POST body/headers, checks backoff, and proxies allowed requests to Kratos via `KratosInternalURL`. This keeps the integration self-contained — no external proxy or Alkemio server changes needed. Browser requests that are blocked receive a 303 redirect to `/login?lockout=true&retry_after=N`, which the client-web LoginPage displays via the existing KratosMessages error UI.
 
 **Sources**:
 - [Kratos login handler source (v1.3.1)](https://github.com/ory/kratos/blob/v1.3.1/selfservice/flow/login/handler.go) - `NewLoginFlow` calls `PreLoginHook`
@@ -171,9 +171,9 @@ For the before-login check (called by proxy, not Kratos), the proxy has direct a
 
 ## R-005: Endpoint Response Design
 
-**Decision**: Return simple, caller-agnostic JSON responses from the webhook-gateway endpoints.
+**Decision**: Return simple, caller-agnostic JSON responses from the kratos-webhooks endpoints.
 
-**Rationale**: Given R-001 (before-login may be called by a proxy, not Kratos), and R-002 (Kratos expects a specific messages format), the webhook-gateway should return a simple response format. The integration layer (proxy, Kratos hook config) adapts the response to whatever the consumer expects.
+**Rationale**: Given R-001 (before-login may be called by a proxy, not Kratos), and R-002 (Kratos expects a specific messages format), the kratos-webhooks should return a simple response format. The integration layer (proxy, Kratos hook config) adapts the response to whatever the consumer expects.
 
 **Before-login response (allowed)**:
 ```json

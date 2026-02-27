@@ -1,4 +1,4 @@
-# AI Agent Guidelines for Alkemio Webhook Gateway
+# AI Agent Guidelines for Alkemio Kratos Webhooks
 
 This document provides essential guidance for AI coding assistants working on this codebase.
 

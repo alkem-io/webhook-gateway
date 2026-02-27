@@ -1,7 +1,7 @@
 .PHONY: build test lint run clean
 
-BINARY_NAME=webhook-gateway
-IMAGE_NAME=alkemio/webhook-gateway
+BINARY_NAME=kratos-webhooks
+IMAGE_NAME=alkemio/kratos-webhooks
 VERSION=v0.0.1
 BUILD_DIR=./bin
 

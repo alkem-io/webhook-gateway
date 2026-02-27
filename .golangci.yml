@@ -56,7 +56,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/alkem-io/webhook-gateway
+        - github.com/alkem-io/kratos-webhooks
 
 issues:
   max-issues-per-linter: 0

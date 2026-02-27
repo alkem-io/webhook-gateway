@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/middleware"
+	"github.com/alkem-io/kratos-webhooks/internal/middleware"
 )
 
 // Handler handles HTTP requests for Kratos verification webhooks.

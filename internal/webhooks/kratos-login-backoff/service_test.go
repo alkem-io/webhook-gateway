@@ -7,8 +7,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/alkem-io/webhook-gateway/internal/config"
-	kratosloginbackoff "github.com/alkem-io/webhook-gateway/internal/webhooks/kratos-login-backoff"
+	"github.com/alkem-io/kratos-webhooks/internal/config"
+	kratosloginbackoff "github.com/alkem-io/kratos-webhooks/internal/webhooks/kratos-login-backoff"
 )
 
 // mockRedisHelper implements kratosloginbackoff.RedisHelper for testing.

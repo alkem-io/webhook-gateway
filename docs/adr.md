@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Master index of all architectural decisions across the webhook-gateway service.
+Master index of all architectural decisions across the kratos-webhooks service.
 Individual ADRs live alongside their feature specs in `specs/<feature>/decisions/`.
 
 ## Decision Log

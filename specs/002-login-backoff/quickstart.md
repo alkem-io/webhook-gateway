@@ -6,7 +6,7 @@
 
 - Go 1.24+
 - Redis running locally (default: `redis://localhost:6379/0`)
-- The webhook-gateway builds and tests pass (`make build && make test`)
+- The kratos-webhooks builds and tests pass (`make build && make test`)
 
 ## Configuration
 
@@ -87,7 +87,7 @@ The after-login endpoint is called by a Kratos webhook. Add this to the Kratos c
 ```yaml
 - hook: web_hook
   config:
-    url: http://alkemio-webhook-gateway-service:8080/api/v1/webhooks/kratos/login-backoff/after-login
+    url: http://alkemio-kratos-webhooks-service:8080/api/v1/webhooks/kratos/login-backoff/after-login
     method: POST
     body: file:///etc/config/login-backoff-after.jsonnet
     response:
@@ -105,21 +105,21 @@ function(ctx) {
 
 ### Before-Login Integration (Reverse Proxy)
 
-The before-login check is handled by a built-in reverse proxy (`proxy.go`). Traefik routes login traffic to the webhook-gateway, which checks backoff on POST requests and proxies allowed requests to Kratos.
+The before-login check is handled by a built-in reverse proxy (`proxy.go`). Traefik routes login traffic to the kratos-webhooks, which checks backoff on POST requests and proxies allowed requests to Kratos.
 
 **Traefik routing** (in `server/.build/traefik/http.yml`):
 
 ```yaml
 # Service
-webhook-gateway:
+kratos-webhooks:
   loadBalancer:
     servers:
-      - url: 'http://webhook-gateway:8080/'
+      - url: 'http://kratos-webhooks:8080/'
 
 # Router (priority 200 — higher than the default kratos-public router)
 kratos-login-backoff:
   rule: 'PathPrefix(`/ory/kratos/public/self-service/login`)'
-  service: 'webhook-gateway'
+  service: 'kratos-webhooks'
   middlewares:
     - strip-kratos-public-prefix
   entryPoints:
@@ -143,13 +143,13 @@ Translation key: `authentication.lockout` in `translation.en.json`.
 
 ### Docker Compose Deployment
 
-The webhook-gateway is added to `quickstart-services.yml`:
+The kratos-webhooks is added to `quickstart-services.yml`:
 
 ```yaml
-webhook-gateway:
-  container_name: alkemio_dev_webhook_gateway
-  hostname: webhook-gateway
-  image: alkemio/webhook-gateway:latest
+kratos-webhooks:
+  container_name: alkemio_dev_kratos_webhooks
+  hostname: kratos-webhooks
+  image: alkemio/kratos-webhooks:latest
   depends_on:
     redis: { condition: service_started }
     rabbitmq: { condition: service_healthy }
@@ -167,5 +167,5 @@ webhook-gateway:
 Build and deploy:
 ```bash
 make docker-build
-cd ../server && docker compose --env-file .env.docker -f quickstart-services.yml -p alkemio-serverdev up -d webhook-gateway
+cd ../server && docker compose --env-file .env.docker -f quickstart-services.yml -p alkemio-serverdev up -d kratos-webhooks
 ```

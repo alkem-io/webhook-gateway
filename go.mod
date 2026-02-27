@@ -1,4 +1,4 @@
-module github.com/alkem-io/webhook-gateway
+module github.com/alkem-io/kratos-webhooks
 
 go 1.24
 

@@ -23,7 +23,7 @@ Templates requiring updates:
 Follow-up TODOs: None
 -->
 
-# Alkemio Webhook Gateway Service Engineering Constitution
+# Alkemio Kratos Webhooks Service Engineering Constitution
 
 **Version**: 1.2.0
 **Ratification Date**: 2025-11-01
