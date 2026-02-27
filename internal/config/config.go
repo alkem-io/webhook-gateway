@@ -64,10 +64,20 @@ func Load() (*Config, error) {
 		LoginBackoffIdentifierLockoutSeconds: getEnvInt("LOGIN_BACKOFF_IDENTIFIER_LOCKOUT_SECONDS", 120),
 		LoginBackoffIPLockoutSeconds:         getEnvInt("LOGIN_BACKOFF_IP_LOCKOUT_SECONDS", 120),
 
-		KratosInternalURL: getEnv("KRATOS_INTERNAL_URL", "http://kratos:4433"),
+		KratosInternalURL: resolveKratosURL(),
 	}
 
 	return cfg, nil
+}
+
+// resolveKratosURL returns the Kratos public API URL.
+// Prefers KRATOS_API_PUBLIC_ENDPOINT (shared configMap key) if set;
+// falls back to KRATOS_INTERNAL_URL for local development.
+func resolveKratosURL() string {
+	if url := os.Getenv("KRATOS_API_PUBLIC_ENDPOINT"); url != "" {
+		return url
+	}
+	return getEnv("KRATOS_INTERNAL_URL", "http://kratos:4433")
 }
 
 // resolveRedisURL returns the Redis connection URL.
